@@ -24,6 +24,12 @@ except UnknownJob:
     
     job.update_config(ss.getvalue())
 
-print 'Invoking Job'
-job.invoke(skip_if_running=True)
+delete = True
+if delete:
+    print 'Deleting job'
+    jenkins.delete_job(target_job)
+else:
+    print 'Invoking Job'
+    job.invoke(skip_if_running=True)
+
 

@@ -1,4 +1,4 @@
-ci-hooks
-========
+cit
+===
 
-Initial work on some hooks for git to integrate with a Jenkins server
+Command line tool for interacting with a continuous integration server. 

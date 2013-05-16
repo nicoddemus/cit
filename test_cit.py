@@ -1,11 +1,12 @@
 from jenkinsapi.jenkins import Jenkins
-from jenkinsapi.exceptions import UnknownJob
 import cit
-import pytest
-import time
 import hashlib
 import os
+import pytest
+import time
 import xml.etree.ElementTree as ET
+import StringIO
+import simplejson
 
 
 JENKINS_URL = 'http://localhost:8080'
@@ -43,7 +44,7 @@ def jenkins(request):
 #===================================================================================================
 # test_create_feature_branch
 #===================================================================================================
-def test_create_feature_branch(jenkins):
+def test_create_feature_branch(jenkins, capsys):
     branch = 'my-feature'
     new_job_name = jenkins.cit_test_job_name + '-' + branch
     owner = 'nicoddemus@gmail.com'
@@ -68,5 +69,39 @@ def test_create_feature_branch(jenkins):
     assert recipient_element.text == 'someone@somewhere.com nicoddemus@gmail.com'
     
     
+#===================================================================================================
+# test_cit_config
+#===================================================================================================
+def test_cit_config(tmpdir, capsys):    
+    cwd = str(tmpdir.join('.git', 'src', 'plk'))
+    os.makedirs(cwd)
+    os.chdir(cwd)
+    
+    input_lines = [
+        'project_win32', 
+        'project_$fb_win32',
+        'project_win64', 
+        'project_$fb_win64',
+        '',
+    ]
+    stdin = StringIO.StringIO('\n'.join(input_lines))
+    cit.main(['cit', 'config'], stdin=stdin)
+    
+    cit_file = tmpdir.join('.cit.json')
+    assert cit_file.ensure()
+    obtained = simplejson.loads(cit_file.read())
+    
+    expected = {
+        'jobs' : [
+            ['project_win32', 'project_$fb_win32'],
+            ['project_win64', 'project_$fb_win64'],
+        ]
+    }
+    assert obtained == expected 
+    
+    
+#===================================================================================================
+# main    
+#===================================================================================================
 if __name__ == '__main__':    
-    pytest.main(['-s'])    
+    pytest.main(['-s', '-ktest_cit_config'])

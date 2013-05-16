@@ -1,6 +1,9 @@
 from jenkinsapi.jenkins import Jenkins
 from jenkinsapi.exceptions import UnknownJob
 import xml.etree.ElementTree as ET
+import os
+import sys
+import simplejson
  
  
 #===================================================================================================
@@ -46,4 +49,107 @@ def create_feature_branch_job(jenkins_url, job_name, new_job_name, branch, owner
     
     return job
         
- 
+
+
+#===================================================================================================
+# main
+#===================================================================================================
+def main(argv, global_config_file=None, stdin=None):
+    # default values
+    if global_config_file is None:
+        global_config_file = os.path.join(os.path.dirname(__file__), '.citconfig')
+        
+    if stdin is None:
+        stdin = sys.stdin
+        
+    # command dispatch
+    if len(argv) <= 1:
+        print_help() 
+        return 1
+    elif argv[1] == 'config':
+        cit_config(global_config_file, stdin)
+        return 0
+    
+    
+
+    return 0
+
+#===================================================================================================
+# print_help
+#===================================================================================================
+def print_help():
+    print 'Commands:'    
+    print     
+    print '    config:            configures jobs for feature branches'
+    print    
+
+
+#===================================================================================================
+# cit_config
+#===================================================================================================
+def cit_config(global_config_file, stdin):
+    cit_file_name, config = load_cit_config(os.getcwd())
+    
+    print 'Configuring jobs for feature branches.'
+    print 
+    
+    updated = False 
+    while True:
+        print 'Source job (empty to exit):',
+        source_job = stdin.readline().strip()
+        if not source_job:
+            break
+        
+        print 'Feature branch job, use $fb to replace by branch name:',
+        fb_job = stdin.readline().strip()
+        if not fb_job:
+            break
+        
+        config.setdefault('jobs', []).append((source_job, fb_job))
+        updated = True
+        
+    print 
+    if updated:
+        dumpjson(cit_file_name, config)
+        print 'Configuration updated.'
+    else:
+        print 'Aborted.'
+    
+        
+#===================================================================================================
+# load_cit_config
+#===================================================================================================
+def load_cit_config(from_dir):
+    tries = 0
+    max_tries = 20
+    while True:
+        gitdir = os.path.join(from_dir, '.git')
+        if os.path.isdir(gitdir):
+            break
+        from_dir = os.path.dirname(from_dir)
+        
+        tries += 1    
+        if tries >= max_tries:
+            raise RuntimeError('could not find .git directory')
+        
+    cit_file_name = os.path.join(from_dir, '.cit.json')
+    config = {}
+    if os.path.isfile(cit_file_name):
+        config = simplejson.loads(file(cit_file_name.read()))
+    return cit_file_name, config
+
+    
+#===================================================================================================
+# dumpjson
+#===================================================================================================
+def dumpjson(filename, data):
+    f = file(filename, 'w')
+    f.write(simplejson.dumps(data, sort_keys=True, indent=2 * ' '))
+    f.close()
+    
+
+#===================================================================================================
+# main
+#===================================================================================================
+if __name__ == '__main__':
+    sys.exit(main(sys.argv)) 

@@ -21,8 +21,8 @@ if os.listdir('.'):
 os.mkdir('repos')
 os.chdir('repos')
 
-print '--> simplejson'    
-subprocess.check_call('git clone http://github.com/simplejson/simplejson', shell=True)
+print '--> pyyaml'    
+subprocess.check_call('git clone http://github.com/yaml/pyyaml.git', shell=True)
 print '--> JenkinsAPI'    
 subprocess.check_call('git clone http://github.com/salimfadhley/jenkinsapi', shell=True)
 print '--> cit'    
@@ -31,10 +31,10 @@ subprocess.check_call('git clone http://github.com/nicoddemus/cit.git', shell=Tr
 os.chdir('..')
 shutil.copy('repos/cit/cit.py', 'cit.py')
 shutil.copytree('repos/jenkinsapi/jenkinsapi', 'jenkinsapi')
-shutil.copytree('repos/simplejson/simplejson', 'simplejson')
+shutil.copytree('repos/pyyaml/lib/yaml', 'yaml')
 print 'Download done.'
 
-import simplejson
+import yaml
 from jenkinsapi.jenkins import Jenkins
 import jenkinsapi.utils.retry # initializing logging, so it will shut up later and don't mess our output
 
@@ -51,9 +51,9 @@ config = {
     }
 }
 
-filename = os.path.abspath('.citconfig')
+filename = os.path.abspath('citconfig.yaml')
 f = file(filename, 'w')
-f.write(simplejson.dumps(config))
+f.write(yaml.dump(config, default_flow_style=False))
 f.close()
 
 print 'Written configuration to: %s' % filename
@@ -71,6 +71,3 @@ except urllib2.URLError, e:
     print 'Update configuration file manually.'
 else:
     print 'OK'
-
-
-

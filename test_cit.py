@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from jenkinsapi.jenkins import Jenkins
 import cit
 import hashlib
@@ -7,6 +8,7 @@ import time
 import xml.etree.ElementTree as ET
 import StringIO
 import yaml
+import mock
 
 
 JENKINS_URL = 'http://localhost:8080'
@@ -25,7 +27,7 @@ def teardown_module(module):
 # jenkins
 #===================================================================================================
 @pytest.fixture
-def jenkins(request):
+def tmp_job_name():
     config = file(os.path.join(os.path.dirname(__file__), 'test_config.xml')).read()
     
     jenkins = Jenkins(JENKINS_URL)
@@ -36,22 +38,37 @@ def jenkins(request):
     job = jenkins.create_job(job_name, config)
     job.update_config(config) 
     
-    jenkins.cit_test_job_name = job_name
-    
-    return jenkins
+    return job_name
     
 
 #===================================================================================================
-# test_create_feature_branch
+# test_add
 #===================================================================================================
-def test_create_feature_branch(jenkins, capsys):
-    branch = 'my-feature'
-    new_job_name = jenkins.cit_test_job_name + '-' + branch
-    owner = 'nicoddemus@gmail.com'
-    cit.create_feature_branch_job(JENKINS_URL, jenkins.cit_test_job_name, new_job_name, branch, owner)
+def test_add(tmp_job_name, tmpdir):
+    cwd = str(tmpdir.join('.git', 'src', 'plk'))
+    os.makedirs(cwd)
+    os.chdir(cwd)
     
-    jenkins.poll()
+    global_config_file = str(tmpdir.join('citconfig.yaml'))
+    global_config = {'jenkins' : {'url' : JENKINS_URL}}
+    yaml.dump(global_config, file(global_config_file, 'w'))
     
+    cit_config = {
+        'jobs' : [{
+            'source-job' : tmp_job_name,
+            'feature-branch-job' : tmp_job_name + '-$fb',
+        }],
+    }
+    cit_config_file = str(tmpdir.join('.cit.yaml'))
+    yaml.dump(cit_config, file(cit_config_file, 'w'))
+    
+    branch = 'new-feature'
+    with mock.patch('cit.get_git_user', autospec=True) as mock_get_git_user:
+        mock_get_git_user.return_value = ('anonymous', 'anonymous@somewhere.com')
+        assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == 0
+    
+    jenkins = Jenkins(JENKINS_URL)
+    new_job_name = tmp_job_name + '-' + branch
     assert jenkins.has_job(new_job_name), "no job %s found. available: %s" % (new_job_name, jenkins.get_jobs_list())
     
     config_xml = jenkins.get_job(new_job_name).get_config()
@@ -66,7 +83,7 @@ def test_create_feature_branch(jenkins, capsys):
     recipient_elements = list(config.findall('.//hudson.tasks.Mailer/recipients'))
     assert len(recipient_elements) == 1
     recipient_element = recipient_elements[0]
-    assert recipient_element.text == 'someone@somewhere.com nicoddemus@gmail.com'
+    assert recipient_element.text == 'anonymous@somewhere.com'
     
     
 #===================================================================================================
@@ -89,7 +106,7 @@ def test_cit_config(tmpdir, capsys):
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
-    cit.main(['cit', 'config'], stdin=stdin, global_config_file=global_config_file)
+    assert cit.main(['cit', 'config'], stdin=stdin, global_config_file=global_config_file) == 0
     
     cit_file = tmpdir.join('.cit.yaml')
     assert cit_file.ensure()
@@ -115,4 +132,4 @@ def test_cit_config(tmpdir, capsys):
 # main    
 #===================================================================================================
 if __name__ == '__main__':    
-    pytest.main(['-s', '-ktest_cit_config'])
+    pytest.main()

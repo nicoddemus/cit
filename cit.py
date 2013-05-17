@@ -1,16 +1,18 @@
+from __future__ import with_statement
 from jenkinsapi.jenkins import Jenkins
 from jenkinsapi.exceptions import UnknownJob
 import xml.etree.ElementTree as ET
 import os
 import sys
 import yaml
+import subprocess
+import contextlib
  
  
 #===================================================================================================
 # create_feature_branch_job
 #===================================================================================================
-def create_feature_branch_job(jenkins_url, job_name, new_job_name, branch, owner):
-    jenkins = Jenkins(jenkins_url)
+def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_email):
     try:
         job = jenkins.get_job(new_job_name)
     except UnknownJob:
@@ -31,26 +33,112 @@ def create_feature_branch_job(jenkins_url, job_name, new_job_name, branch, owner
     recipient_elements = list(tree.findall('.//hudson.tasks.Mailer/recipients'))
     if len(recipient_elements) == 1:
         recipient_element = recipient_elements[0]
-        updated = False
-        if recipient_element.text:
-            if owner not in recipient_element.text:
-                recipient_element.text = recipient_element.text + ' ' + owner
-                updated = True 
-        else:
-            recipient_element.text = owner
-            updated = True
-            
-        if updated:
-            print '  Added "%s" to the list of mail recipients' % owner
-        else:
-            print '  "%s" Already in the list of mail recipients'  % owner
+        recipient_element.text = user_email
+        print '  Set "%s" as email recipient for build results.' % user_email
             
     job.update_config(ET.tostring(tree))
     
     return job
         
 
+     
+#===================================================================================================
+# _get_configured_jobs
+#===================================================================================================
+def _get_configured_jobs(branch, job_config):  
+    for job_config in job_config['jobs']:
+        job_name = job_config['source-job'] 
+        new_job_name = job_config['feature-branch-job'].replace('$fb', branch)
+        yield job_name, new_job_name   
+        
+        
+#===================================================================================================
+# cit_add
+#===================================================================================================
+def cit_add(branch, global_config):
+    cit_file_name, job_config = load_cit_config(os.getcwd())
+    
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+    for job_name, new_job_name in _get_configured_jobs(branch, job_config):
+        user_name, user_email = get_git_user(cit_file_name)
+        create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_email)
+        
+        
+#===================================================================================================
+# cit_rm
+#===================================================================================================
+def cit_rm(branch, global_config):
+    cit_file_name, job_config = load_cit_config(os.getcwd())
+    
+    if branch is None:
+        branch = get_git_branch(cit_file_name)
+    
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+    for _, new_job_name in _get_configured_jobs(branch, job_config):
+        if jenkins.has_job(new_job_name):
+            jenkins.delete_job(new_job_name)
+            print new_job_name, '(REMOVED)'
+        else:
+            print new_job_name, '(NOT FOUND)'
+        
+#===================================================================================================
+# cit_start
+#===================================================================================================
+def cit_start(branch, global_config):        
+    cit_file_name, job_config = load_cit_config(os.getcwd())
+    
+    if branch is None:
+        branch = get_git_branch(cit_file_name)
+    
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+    
+    for _, new_job_name in _get_configured_jobs(branch, job_config):
+        if jenkins.has_job(new_job_name):
+            job = jenkins.get_job(new_job_name)
+            if not job.is_running():
+                job.invoke()
+                status = '(STARTED)'
+            else:
+                status = '(RUNNING)'
+        else:
+            status = '(NOT FOUND)'
+        print new_job_name, status
+        
+        
+#===================================================================================================
+# get_git_user
+#===================================================================================================
+def get_git_user(cit_file_name):
+    with chdir(cit_file_name):
+        user_name = subprocess.check_output('git config --get user.name', shell=True).strip()
+        user_email = subprocess.check_output('git config --get user.email', shell=True).strip()
+        return user_name, user_email
+        
+        
+#===================================================================================================
+# get_git_branch
+#===================================================================================================
+def get_git_branch(cit_file_name):        
+    with chdir(cit_file_name):
+        return subprocess.check_output('git rev-parse --abbrev-ref HEAD', shell=True).strip()
 
+
+#===================================================================================================
+# chdir
+#===================================================================================================
+@contextlib.contextmanager        
+def chdir(cwd):
+    old_cwd = os.getcwd()
+    if os.path.isfile(cwd):
+        cwd = os.path.dirname(cwd)
+    os.chdir(cwd)
+    yield
+    os.chdir(old_cwd)
+    
+    
 #===================================================================================================
 # main
 #===================================================================================================
@@ -75,6 +163,23 @@ def main(argv, global_config_file=None, stdin=None):
     elif argv[1] == 'config':
         cit_config(global_config, stdin)
         return 0
+    elif argv[1] == 'add':
+        cit_add(argv[2], global_config)
+        return 0
+    elif argv[1] in ('start', 'rm'):
+        if len(argv) > 2:
+            branch = argv[2]
+        else:
+            branch = None
+        if argv[1] == 'start':
+            cit_start(branch, global_config)
+        elif argv[1] == 'rm':
+            cit_rm(branch, global_config)
+        return 0
+    else:
+        print 'Unknown command:', argv[1]
+        print_help()
+        return 2
 
     return 0
 
@@ -85,6 +190,8 @@ def print_help():
     print 'Commands:'    
     print     
     print '    config:            configures jobs for feature branches'
+    print '    add BRANCH:        add a new feature branch job to Jenkins'
+    print '    start [BRANCH]:    starts a new build for the given feature branch'
     print    
 
 
@@ -143,9 +250,12 @@ def load_cit_config(from_dir):
             raise RuntimeError('could not find .git directory')
         
     cit_file_name = os.path.join(from_dir, '.cit.yaml')
+    
     config = {}
     if os.path.isfile(cit_file_name):
-        config = yaml.load(file(cit_file_name).read()) or {}
+        loaded_config = yaml.load(file(cit_file_name).read()) or {}
+        config.update(loaded_config)
+        
     return cit_file_name, config
 
     

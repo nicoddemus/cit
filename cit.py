@@ -3,7 +3,7 @@ from jenkinsapi.exceptions import UnknownJob
 import xml.etree.ElementTree as ET
 import os
 import sys
-import simplejson
+import yaml
  
  
 #===================================================================================================
@@ -57,20 +57,24 @@ def create_feature_branch_job(jenkins_url, job_name, new_job_name, branch, owner
 def main(argv, global_config_file=None, stdin=None):
     # default values
     if global_config_file is None:
-        global_config_file = os.path.join(os.path.dirname(__file__), '.citconfig')
+        global_config_file = os.path.join(os.path.dirname(__file__), 'citconfig.yaml')
         
     if stdin is None:
         stdin = sys.stdin
         
+    # read global config
+    if not os.path.isfile(global_config_file):
+        sys.exit('could not find cit config file at: %s' % global_config_file)
+        
+    global_config = yaml.load(file(global_config_file).read()) 
+    
     # command dispatch
     if len(argv) <= 1:
         print_help() 
         return 1
     elif argv[1] == 'config':
-        cit_config(global_config_file, stdin)
+        cit_config(global_config, stdin)
         return 0
-    
-    
 
     return 0
 
@@ -87,30 +91,36 @@ def print_help():
 #===================================================================================================
 # cit_config
 #===================================================================================================
-def cit_config(global_config_file, stdin):
+def cit_config(global_config, stdin):
     cit_file_name, config = load_cit_config(os.getcwd())
     
-    print 'Configuring jobs for feature branches.'
+    print 'Configuring jobs for feature branches: %s' % cit_file_name
     print 
     
-    updated = False 
+    updated = False
     while True:
-        print 'Source job (empty to exit):',
+        sys.stdout.write('Source job (empty to exit): ')
         source_job = stdin.readline().strip()
         if not source_job:
             break
         
-        print 'Feature branch job, use $fb to replace by branch name:',
+        sys.stdout.write('Feature branch job, use $fb to replace by branch name: ')
         fb_job = stdin.readline().strip()
         if not fb_job:
             break
         
-        config.setdefault('jobs', []).append((source_job, fb_job))
+        fb_data = {
+            'source-job' : source_job,
+            'feature-branch-job' : fb_job, 
+        }
+        config.setdefault('jobs', []).append(fb_data)
         updated = True
         
     print 
     if updated:
-        dumpjson(cit_file_name, config)
+        f = file(cit_file_name, 'w')
+        f.write(yaml.dump(config, default_flow_style=False))
+        f.close()
         print 'Configuration updated.'
     else:
         print 'Aborted.'
@@ -132,22 +142,13 @@ def load_cit_config(from_dir):
         if tries >= max_tries:
             raise RuntimeError('could not find .git directory')
         
-    cit_file_name = os.path.join(from_dir, '.cit.json')
+    cit_file_name = os.path.join(from_dir, '.cit.yaml')
     config = {}
     if os.path.isfile(cit_file_name):
-        config = simplejson.loads(file(cit_file_name.read()))
+        config = yaml.load(file(cit_file_name).read()) or {}
     return cit_file_name, config
 
     
-#===================================================================================================
-# dumpjson
-#===================================================================================================
-def dumpjson(filename, data):
-    f = file(filename, 'w')
-    f.write(simplejson.dumps(data, sort_keys=True, indent=2 * ' '))
-    f.close()
-    
-
 #===================================================================================================
 # main
 #===================================================================================================

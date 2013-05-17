@@ -6,7 +6,7 @@ import pytest
 import time
 import xml.etree.ElementTree as ET
 import StringIO
-import simplejson
+import yaml
 
 
 JENKINS_URL = 'http://localhost:8080'
@@ -77,6 +77,10 @@ def test_cit_config(tmpdir, capsys):
     os.makedirs(cwd)
     os.chdir(cwd)
     
+    global_config_file = str(tmpdir.join('citconfig.yaml'))
+    global_config = {'jenkins' : {'url' : JENKINS_URL}}
+    yaml.dump(global_config, file(global_config_file, 'w'))
+    
     input_lines = [
         'project_win32', 
         'project_$fb_win32',
@@ -85,16 +89,23 @@ def test_cit_config(tmpdir, capsys):
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
-    cit.main(['cit', 'config'], stdin=stdin)
+    cit.main(['cit', 'config'], stdin=stdin, global_config_file=global_config_file)
     
-    cit_file = tmpdir.join('.cit.json')
+    cit_file = tmpdir.join('.cit.yaml')
     assert cit_file.ensure()
-    obtained = simplejson.loads(cit_file.read())
+    contents = cit_file.read()
+    obtained = yaml.load(contents)
     
     expected = {
         'jobs' : [
-            ['project_win32', 'project_$fb_win32'],
-            ['project_win64', 'project_$fb_win64'],
+            {
+                'source-job': 'project_win32',
+                'feature-branch-job' : 'project_$fb_win32', 
+            },
+            {
+                'source-job': 'project_win64',
+                'feature-branch-job' : 'project_$fb_win64', 
+            },
         ]
     }
     assert obtained == expected 

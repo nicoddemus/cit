@@ -7,6 +7,23 @@ import sys
 import yaml
 import subprocess
 import contextlib
+
+#===================================================================================================
+# check_output
+#===================================================================================================
+def check_output(*args, **kwargs):
+    '''
+    Support subprocess.check_output for Python < 2.7
+    '''
+    try:
+        return subprocess.check_output(*args, **kwargs)
+    except AttributeError:
+        kwargs['stdout'] = subprocess.PIPE
+        popen = subprocess.Popen(*args, **kwargs)
+        stdout, stderr = popen.communicate()
+        if popen.returncode != 0:
+            raise subprocess.CalledProcessError
+        return stdout
  
  
 #===================================================================================================
@@ -113,8 +130,8 @@ def cit_start(branch, global_config):
 #===================================================================================================
 def get_git_user(cit_file_name):
     with chdir(cit_file_name):
-        user_name = subprocess.check_output('git config --get user.name', shell=True).strip()
-        user_email = subprocess.check_output('git config --get user.email', shell=True).strip()
+        user_name = check_output('git config --get user.name', shell=True).strip()
+        user_email = check_output('git config --get user.email', shell=True).strip()
         return user_name, user_email
         
         
@@ -123,7 +140,7 @@ def get_git_user(cit_file_name):
 #===================================================================================================
 def get_git_branch(cit_file_name):        
     with chdir(cit_file_name):
-        return subprocess.check_output('git rev-parse --abbrev-ref HEAD', shell=True).strip()
+        return check_output('git rev-parse --abbrev-ref HEAD', shell=True).strip()
 
 
 #===================================================================================================

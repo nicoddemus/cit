@@ -52,6 +52,12 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
         recipient_element = recipient_elements[0]
         recipient_element.text = user_email
         print '  Set "%s" as email recipient for build results.' % user_email
+        
+    # remove properties from the build so we can use "start" to start-up jobs
+    properties_elem = tree.find('./properties')
+    if properties_elem is not None:
+        for elem in properties_elem.findall('./hudson.model.ParametersDefinitionProperty'):
+            properties_elem.remove(elem)
             
     job.update_config(ET.tostring(tree))
     

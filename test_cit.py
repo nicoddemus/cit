@@ -73,6 +73,7 @@ def test_add(tmp_job_name, tmpdir):
     
     config_xml = jenkins.get_job(new_job_name).get_config()
     
+    # ensure we configured branch correctly
     config = ET.fromstring(config_xml)
     branches_elements = list(config.findall('.//branches'))
     assert len(branches_elements) == 1
@@ -80,10 +81,15 @@ def test_add(tmp_job_name, tmpdir):
     name_elem = branches_elem.findall('hudson.plugins.git.BranchSpec/name')[0]    
     assert name_elem.text == branch
     
+    # ensure we have set the user email recipient
     recipient_elements = list(config.findall('.//hudson.tasks.Mailer/recipients'))
     assert len(recipient_elements) == 1
     recipient_element = recipient_elements[0]
     assert recipient_element.text == 'anonymous@somewhere.com'
+    
+    # ensure we don't have build parameters anymore
+    params = list(config.findall('.//hudson.model.ParametersDefinitionProperty'))
+    assert len(params) == 0
     
     
 #===================================================================================================

@@ -91,6 +91,11 @@ def test_add(tmp_job_name, tmpdir):
     params = list(config.findall('.//hudson.model.ParametersDefinitionProperty'))
     assert len(params) == 0
     
+    # ensure triggered repository polling
+    triggers = list(config.findall('.//hudson.triggers.SCMTrigger'))
+    assert len(triggers) == 1
+    assert triggers[0].find('spec').text == 'H/5 * * * *'
+    
     
 #===================================================================================================
 # test_cit_config

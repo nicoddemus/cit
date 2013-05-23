@@ -3,7 +3,8 @@ Simple install script that installs cit and its dependencies without touching th
 installation.
 
 Usage::
-    curl -s https://raw.github.com/nicoddemus/cit/master/cit_install.py | python
+    curl -s https://raw.github.com/nicoddemus/cit/master/cit_install.py > cit_install.py
+    python cit_install.py
 '''
 import subprocess
 import os

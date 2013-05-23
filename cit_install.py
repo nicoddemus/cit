@@ -9,10 +9,11 @@ import subprocess
 import os
 import sys
 import shutil
-import urllib
 import urllib2
 
-if os.listdir('.'):
+# can only start installation if in an empty directory or if directory contains this file
+contents = os.listdir('.') 
+if contents and contents != [os.path.basename(__file__)]:
     sys.exit('cit must be installed in an empty directory.')
 
 #===================================================================================================

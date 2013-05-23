@@ -44,7 +44,8 @@ def tmp_job_name():
 #===================================================================================================
 # test_add
 #===================================================================================================
-def test_add(tmp_job_name, tmpdir):
+@pytest.mark.parametrize('branch', ['new-feature', None])
+def test_add(tmp_job_name, tmpdir, branch):
     cwd = str(tmpdir.join('.git', 'src', 'plk'))
     os.makedirs(cwd)
     os.chdir(cwd)
@@ -62,10 +63,14 @@ def test_add(tmp_job_name, tmpdir):
     cit_config_file = str(tmpdir.join('.cit.yaml'))
     yaml.dump(cit_config, file(cit_config_file, 'w'))
     
+    with mock.patch('cit.get_git_branch', autospec=True) as mock_get_git_branch:
+        mock_get_git_branch.return_value = 'new-feature'
+        
+        with mock.patch('cit.get_git_user', autospec=True) as mock_get_git_user:
+            mock_get_git_user.return_value = ('anonymous', 'anonymous@somewhere.com')
+            assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == 0
+    
     branch = 'new-feature'
-    with mock.patch('cit.get_git_user', autospec=True) as mock_get_git_user:
-        mock_get_git_user.return_value = ('anonymous', 'anonymous@somewhere.com')
-        assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == 0
     
     jenkins = Jenkins(JENKINS_URL)
     new_job_name = tmp_job_name + '-' + branch

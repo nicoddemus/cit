@@ -68,6 +68,9 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
 def cit_add(branch, global_config):
     cit_file_name, job_config = load_cit_local_config(os.getcwd())
     
+    if branch is None:
+        branch = get_git_branch(cit_file_name)
+    
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
     for job_name, new_job_name in get_configured_jobs(branch, job_config):
@@ -251,15 +254,14 @@ def main(argv, global_config_file=None, stdin=None):
     elif argv[1] == 'config':
         cit_config(global_config, stdin)
         return 0
-    elif argv[1] == 'add':
-        cit_add(argv[2], global_config)
-        return 0
-    elif argv[1] in ('start', 'rm'):
+    elif argv[1] in ('add', 'start', 'rm'):
         if len(argv) > 2:
             branch = argv[2]
         else:
             branch = None
-        if argv[1] == 'start':
+        if argv[1] == 'add':
+            cit_add(branch, global_config)
+        elif argv[1] == 'start':
             cit_start(branch, global_config)
         elif argv[1] == 'rm':
             cit_rm(branch, global_config)

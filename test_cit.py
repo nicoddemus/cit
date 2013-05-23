@@ -101,6 +101,10 @@ def test_add(tmp_job_name, tmpdir, branch):
     assert len(triggers) == 1
     assert triggers[0].find('spec').text == 'H/5 * * * *'
     
+    # ensure no build is triggered after the job
+    build_triggers = list(config.findall('.//hudson.tasks.BuildTrigger'))
+    assert len(build_triggers) == 0
+    
     
 #===================================================================================================
 # test_cit_config

@@ -55,7 +55,13 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     scm_trigger = ET.SubElement(triggers_elem, 'hudson.triggers.SCMTrigger')
     ET.SubElement(scm_trigger, 'spec').text = 'H/5 * * * *'
     ET.SubElement(scm_trigger, 'ignorePostCommitHooks').text = 'false'
-            
+    
+    # remove build triggers after this job
+    publishers_elem = tree.find('./publishers')
+    if publishers_elem is not None:
+        for elem in publishers_elem.findall('./hudson.tasks.BuildTrigger'):
+            publishers_elem.remove(elem)
+             
     job.update_config(ET.tostring(tree))
     
     return job

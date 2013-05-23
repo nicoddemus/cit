@@ -107,9 +107,9 @@ def test_add(tmp_job_name, tmpdir, branch):
     
     
 #===================================================================================================
-# test_cit_config
+# test_cit_init
 #===================================================================================================
-def test_cit_config(tmpdir, capsys):    
+def test_cit_init(tmpdir, capsys):    
     cwd = str(tmpdir.join('.git', 'src', 'plk'))
     os.makedirs(cwd)
     os.chdir(cwd)
@@ -126,7 +126,7 @@ def test_cit_config(tmpdir, capsys):
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
-    assert cit.main(['cit', 'config'], stdin=stdin, global_config_file=global_config_file) == 0
+    assert cit.main(['cit', 'init'], stdin=stdin, global_config_file=global_config_file) == 0
     
     cit_file = tmpdir.join('.cit.yaml')
     assert cit_file.ensure()

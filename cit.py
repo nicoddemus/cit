@@ -163,9 +163,9 @@ def get_git_branch(cit_file_name):
 #===================================================================================================
 
 #===================================================================================================
-# cit_config
+# cit_init
 #===================================================================================================
-def cit_config(global_config, stdin):
+def cit_init(global_config, stdin):
     cit_file_name, config = load_cit_local_config(os.getcwd())
     
     print 'Configuring jobs for feature branches: %s' % cit_file_name
@@ -257,8 +257,8 @@ def main(argv, global_config_file=None, stdin=None):
     if len(argv) <= 1:
         print_help() 
         return 1
-    elif argv[1] == 'config':
-        cit_config(global_config, stdin)
+    elif argv[1] == 'init':
+        cit_init(global_config, stdin)
         return 0
     elif argv[1] in ('add', 'start', 'rm'):
         if len(argv) > 2:
@@ -273,11 +273,12 @@ def main(argv, global_config_file=None, stdin=None):
             cit_rm(branch, global_config)
         return 0
     else:
-        print 'Unknown command:', argv[1]
+        print 'Unknown command: "%s"' % argv[1]
         print_help()
         return 2
 
     return 0
+
 
 #===================================================================================================
 # print_help
@@ -285,10 +286,10 @@ def main(argv, global_config_file=None, stdin=None):
 def print_help():
     print 'Commands:'    
     print     
-    print '    config:            configures jobs for feature branches'
-    print '    add [BRANCH]:      add a new feature branch job to Jenkins'
-    print '    start [BRANCH]:    starts a new build for the given feature branch'
-    print '    rm [BRANCH]:       removes job for feature branches given'
+    print '    init                   configures jobs for feature branches for this git repo'
+    print '    add [BRANCH]           add a new feature branch job to Jenkins'
+    print '    start [BRANCH]         starts a new build for the given feature branch'
+    print '    rm [BRANCH]            removes job for feature branches given'
     print    
 
 

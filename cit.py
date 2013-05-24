@@ -24,25 +24,25 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     try:
         job = jenkins.get_job(new_job_name)
     except UnknownJob:
-        print 'Copying job "%s" to "%s"...' % (job_name, new_job_name)
+        status = 'CREATED'
         job = jenkins.copy_job(job_name, new_job_name)
+    else:
+        status = 'UPDATED'
         
-    print 'Updating configuration for job "%s"' % new_job_name
+    print '%s => %s (%s)' % (job_name, new_job_name, status)
+        
     tree = ET.fromstring(job.get_config())
     
     branch_elements = list(tree.findall('.//hudson.plugins.git.BranchSpec/name'))
     if len(branch_elements) > 0:
-        old_branch = branch_elements[0].text
         branch_elements[0].text = branch
-        print '  Branch changed to "%s" (was "%s")' % (branch, old_branch)
     else:
-        print '  Could not find any branch spec to replace!'
+        print '  warning: Could not find any branch spec to replace!'
     
     recipient_elements = list(tree.findall('.//hudson.tasks.Mailer/recipients'))
     if len(recipient_elements) == 1:
         recipient_element = recipient_elements[0]
         recipient_element.text = user_email
-        print '  Set "%s" as email recipient for build results.' % user_email
         
     # remove properties from the build so we can use "start" to start-up jobs
     properties_elem = tree.find('./properties')
@@ -171,14 +171,14 @@ def cit_init(global_config, stdin):
     print 'Configuring jobs for feature branches: %s' % cit_file_name
     print 
     
-    updated = False
+    updated = 0
     while True:
-        sys.stdout.write('Source job (empty to exit): ')
+        sys.stdout.write('Source job (empty to exit):      ')
         source_job = stdin.readline().strip()
         if not source_job:
             break
         
-        sys.stdout.write('Feature branch job, use $name to replace by branch name: ')
+        sys.stdout.write('Feature job (shh, use $name):    ')
         fb_job = stdin.readline().strip()
         if not fb_job:
             break
@@ -188,16 +188,18 @@ def cit_init(global_config, stdin):
             'feature-branch-job' : fb_job, 
         }
         config.setdefault('jobs', []).append(fb_data)
-        updated = True
+        updated += 1
+        print 'Done! Next?'
+        print
         
     print 
     if updated:
         f = file(cit_file_name, 'w')
         f.write(yaml.dump(config, default_flow_style=False))
         f.close()
-        print 'Configuration updated.'
+        print 'Done! Configured %d job(s)!' % updated
     else:
-        print 'Aborted.'
+        print 'Abort? Okaay.'
     
 
 #===================================================================================================

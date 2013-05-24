@@ -57,7 +57,7 @@ def test_add(tmp_job_name, tmpdir, branch):
     cit_config = {
         'jobs' : [{
             'source-job' : tmp_job_name,
-            'feature-branch-job' : tmp_job_name + '-$fb',
+            'feature-branch-job' : tmp_job_name + '-$name',
         }],
     }
     cit_config_file = str(tmpdir.join('.cit.yaml'))
@@ -120,9 +120,9 @@ def test_cit_init(tmpdir, capsys):
     
     input_lines = [
         'project_win32', 
-        'project_$fb_win32',
+        'project_$name_win32',
         'project_win64', 
-        'project_$fb_win64',
+        'project_$name_win64',
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
@@ -137,11 +137,11 @@ def test_cit_init(tmpdir, capsys):
         'jobs' : [
             {
                 'source-job': 'project_win32',
-                'feature-branch-job' : 'project_$fb_win32', 
+                'feature-branch-job' : 'project_$name_win32', 
             },
             {
                 'source-job': 'project_win64',
-                'feature-branch-job' : 'project_$fb_win64', 
+                'feature-branch-job' : 'project_$name_win64', 
             },
         ]
     }

@@ -178,7 +178,7 @@ def cit_init(global_config, stdin):
         if not source_job:
             break
         
-        sys.stdout.write('Feature branch job, use $fb to replace by branch name: ')
+        sys.stdout.write('Feature branch job, use $name to replace by branch name: ')
         fb_job = stdin.readline().strip()
         if not fb_job:
             break
@@ -206,7 +206,7 @@ def cit_init(global_config, stdin):
 def get_configured_jobs(branch, job_config):  
     for job_config in job_config['jobs']:
         job_name = job_config['source-job'] 
-        new_job_name = job_config['feature-branch-job'].replace('$fb', branch)
+        new_job_name = job_config['feature-branch-job'].replace('$name', branch)
         yield job_name, new_job_name
         
         

@@ -39,7 +39,7 @@ Usage:
 
 ```
 cd project_name
-cit init # this will create a *.yaml file which can be add to the ignore list.
+cit init
 Configuring jobs for feature branches: \project_name\.cit.yaml
 
 Source job (empty to exit):      project_name__1104-win32__21-project_name
@@ -50,6 +50,8 @@ Source job (empty to exit):
 
 Done! Configured 1 job(s)!
 ```
+
+This will create a `.cit.yaml` file at the project's root which should be commited to version control.
 
 ### add
 

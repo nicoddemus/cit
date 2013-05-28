@@ -60,7 +60,26 @@ If you don't give a branch name the current branch will be used.
 
 Usage:
 ```
-cit add
+cit add my_feature_branch
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (CREATED)
 ```
 
+### rm
+
+This command is responsible for removing the branchs under cit's watch. That means that jobs related to removed branch will be also removed from Jenkins.
+If you don't give a branch name the current branch will be taken.
+
+Usage:
+```
+cit rm my_feature_branch
+project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (REMOVED)
+```
+
+### start
+
+This command will force jobs related to the given branch to start running.
+
+Usage:
+```
+cit start my_feature_branch
+```

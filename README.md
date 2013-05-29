@@ -5,14 +5,26 @@ Command line tool for interacting with a continuous integration server.
 ## Installing
 
 1. Create the folder where cit will be installed.
-<pre><code>c:\cit
-</code></pre>
+
+```
+c:\cit
+```
+
 
 2. Copy file `cit_install.py` to cit folder.
-<pre><code>curl https://raw.github.com/nicoddemus/cit/master/cit_install.py > c:\cit\cit_install.py
-</code></pre>
+
+```
+curl -O https://raw.github.com/nicoddemus/cit/master/cit_install.py
+```
+
+or 
+
+```
+wget https://raw.github.com/nicoddemus/cit/master/cit_install.py
+```
 
 3. Run cit installation. As part of installation process you will be promped to provide Jenkins server address; just copy/paste the server directly from the browser and it should be OK.
+
 ```
   python c:\cit\cit_install.py
   --> pyyaml
@@ -59,6 +71,7 @@ This command is responsible for adding the branchs that should be under cit's wa
 If you don't give a branch name the current branch will be used.
 
 Usage:
+
 ```
 cit add my_feature_branch
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (CREATED)
@@ -70,6 +83,7 @@ This command is responsible for removing the branchs under cit's watch. That mea
 If you don't give a branch name the current branch will be taken.
 
 Usage:
+
 ```
 cit rm my_feature_branch
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (REMOVED)
@@ -80,6 +94,7 @@ project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-w
 This command will force jobs related to the given branch to start running.
 
 Usage:
+
 ```
 cit start my_feature_branch
 ```

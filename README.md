@@ -47,6 +47,11 @@ Following there is a quick overview about main commands.
 
 This command is responsible for configuring Jenkins jobs. The command will ask you the name of the source job, which is be taken a template for feature jobs. After that you have to inform the job name pattern.
 
+Tips:
+* You can insert as many job templates as you want (e.g. one for each platform).
+* The variable `$name` contains the name of the branch used on the template.
+
+
 Usage:
 
 ```
@@ -67,25 +72,25 @@ This will create a `.cit.yaml` file at the project's root which should be commit
 
 ### add
 
-This command is responsible for adding the branchs that should be under cit's watch. Any push request to the server will trigger the related job to run (lagging a few minutes).
+This command is responsible for adding the branches that should be under cit's watch. Any push request to the server will trigger the related job to run (lagging a few minutes).
 If you don't give a branch name the current branch will be used.
 
 Usage:
 
 ```
-cit add my_feature_branch
+cit add [my_feature_branch]
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (CREATED)
 ```
 
 ### rm
 
-This command is responsible for removing the branchs under cit's watch. That means that jobs related to removed branch will be also removed from Jenkins.
+This command is responsible for removing the branches from cit's watch. That means that jobs related to the removed branch will be also removed from Jenkins.
 If you don't give a branch name the current branch will be taken.
 
 Usage:
 
 ```
-cit rm my_feature_branch
+cit rm [my_feature_branch]
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (REMOVED)
 ```
 

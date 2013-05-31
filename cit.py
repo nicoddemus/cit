@@ -22,13 +22,12 @@ configure_submodules_path()
 from jenkinsapi.exceptions import UnknownJob
 from jenkinsapi.jenkins import Jenkins
 import contextlib
-import jenkinsapi
 import subprocess
 import xml.etree.ElementTree as ET
 import yaml
 import os
 import sys
-
+import urllib2
 
 #===================================================================================================
 # cit commands
@@ -222,6 +221,38 @@ def cit_init(global_config, stdin):
     else:
         print 'Abort? Okaay.'
     
+    
+#===================================================================================================
+# cit_install
+#===================================================================================================
+def cit_install(global_config_file, stdin):
+    print '=' * 60
+    print 'Configuration'
+    print '=' * 60
+    sys.stdout.write('- Jenkins URL:   ')
+    jenkins_url = stdin.readline().strip()
+    if not jenkins_url.startswith('http'):
+        jenkins_url = 'http://' + jenkins_url
+        
+    print
+    print 'Checking Jenkins server...',
+    try:
+        Jenkins(jenkins_url)
+    except urllib2.URLError, e:
+        print 'ERROR (%s)' % e
+    else:
+        print 'OK'
+    
+    config = {
+    'jenkins' : {
+        'url' : jenkins_url,
+        }
+    }
+    
+    f = file(global_config_file, 'w')
+    f.write(yaml.dump(config, default_flow_style=False))
+    f.close()
+    
 
 #===================================================================================================
 # get_configured_jobs
@@ -270,19 +301,25 @@ def main(argv, global_config_file=None, stdin=None):
     if stdin is None:
         stdin = sys.stdin
         
+    # --install option: used to initialize configuration
+    if '--install' in argv:
+        cit_install(global_config_file, stdin)
+        return RETURN_CODE_OK
+    
     # read global config
     if not os.path.isfile(global_config_file):
-        sys.exit('could not find cit config file at: %s' % global_config_file)
+        print >> sys.stderr, 'could not find cit config file at: %s' % global_config_file
+        return RETURN_CODE_CONFIG_NOT_FOUND
         
     global_config = yaml.load(file(global_config_file).read()) 
     
     # command dispatch
     if len(argv) <= 1:
         print_help() 
-        return 1
+        return RETURN_CODE_OK
     elif argv[1] == 'init':
         cit_init(global_config, stdin)
-        return 0
+        return RETURN_CODE_OK
     elif argv[1] in ('add', 'start', 'rm'):
         if len(argv) > 2:
             branch = argv[2]
@@ -294,13 +331,20 @@ def main(argv, global_config_file=None, stdin=None):
             cit_start(branch, global_config)
         elif argv[1] == 'rm':
             cit_rm(branch, global_config)
-        return 0
+        return RETURN_CODE_OK
     else:
         print 'Unknown command: "%s"' % argv[1]
         print_help()
-        return 2
+        return RETURN_CODE_UNKNOWN_COMMAND
 
-    return 0
+    return RETURN_CODE_OK
+
+
+# Error Codes --------------------------------------------------------------------------------------
+
+RETURN_CODE_OK = 0 
+RETURN_CODE_UNKNOWN_COMMAND = 2
+RETURN_CODE_CONFIG_NOT_FOUND = 3 
 
 
 #===================================================================================================

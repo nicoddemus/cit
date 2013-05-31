@@ -68,7 +68,7 @@ def test_add(tmp_job_name, tmpdir, branch):
         
         with mock.patch('cit.get_git_user', autospec=True) as mock_get_git_user:
             mock_get_git_user.return_value = ('anonymous', 'anonymous@somewhere.com')
-            assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == 0
+            assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == cit.RETURN_CODE_OK
     
     branch = 'new-feature'
     
@@ -126,7 +126,7 @@ def test_cit_init(tmpdir, capsys):
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
-    assert cit.main(['cit', 'init'], stdin=stdin, global_config_file=global_config_file) == 0
+    assert cit.main(['cit', 'init'], stdin=stdin, global_config_file=global_config_file) == cit.RETURN_CODE_OK
     
     cit_file = tmpdir.join('.cit.yaml')
     assert cit_file.ensure()
@@ -146,6 +146,31 @@ def test_cit_init(tmpdir, capsys):
         ]
     }
     assert obtained == expected 
+    
+    
+#===================================================================================================
+# test_cit_install
+#===================================================================================================
+def test_cit_install(tmpdir):    
+    cwd = str(tmpdir.join('src', 'plk'))
+    os.makedirs(cwd)
+    os.chdir(cwd)
+    
+    global_config_file = tmpdir.join('citconfig.yaml')
+    
+    input_lines = [
+        'localhost:8080',
+        '',
+    ]
+    stdin = StringIO.StringIO('\n'.join(input_lines))
+    
+    assert cit.main(['cit'], global_config_file=str(global_config_file)) == cit.RETURN_CODE_CONFIG_NOT_FOUND
+    assert cit.main(['cit', '--install'], stdin=stdin, global_config_file=str(global_config_file)) == cit.RETURN_CODE_OK
+    
+    assert global_config_file.ensure()
+    contents = global_config_file.read()
+    obtained = yaml.load(contents)
+    assert obtained == {'jenkins' : {'url' : 'http://localhost:8080'}}     
     
     
 #===================================================================================================

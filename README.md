@@ -6,33 +6,33 @@ Command line tool for interacting with a continuous integration server.
 
 1. Clone the repository:
 
-```
-git clone https://github.com/nicoddemus/cit.git
-```
+    ```
+    git clone https://github.com/nicoddemus/cit.git
+    ```
 
 2. Execute `python install.py` in the directory to fetch dependencies and execute initial configuration.
 
-```
-cd cit
-python install.py
-```
+    ```
+    cd cit
+    python install.py
+    ```
 
-As part of installation process you will be promped to provide Jenkins server address: 
-
-```
-============================================================
-Configuration
-============================================================
-- Enter Jenkins URL:   
-```
-
-just copy/paste the server directly from the browser and it should be OK.
-
-```
-- Jenkins URL:   http://localhost:8080
-
-Checking Jenkins server... OK
-```
+    As part of installation process you will be promped to provide Jenkins server address: 
+    
+    ```
+    ============================================================
+    Configuration
+    ============================================================
+    - Enter Jenkins URL:   
+    ```
+    
+    just copy/paste the server directly from the browser and it should be OK.
+    
+    ```
+    - Jenkins URL:   http://localhost:8080
+    
+    Checking Jenkins server... OK
+    ```
 
 ## Commands
 

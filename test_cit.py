@@ -86,6 +86,12 @@ def test_add(tmp_job_name, tmpdir, branch):
     name_elem = branches_elem.findall('hudson.plugins.git.BranchSpec/name')[0]    
     assert name_elem.text == branch
     
+    # ensure we have updated the display name with the feature branch's name
+    display_name_elements = list(config.findall('.//displayName'))
+    assert len(display_name_elements) == 1
+    display_name_element = display_name_elements[0]
+    assert display_name_element.text == 'SS win32 (%s)' % branch
+    
     # ensure we have set the user email recipient
     recipient_elements = list(config.findall('.//hudson.tasks.Mailer/recipients'))
     assert len(recipient_elements) == 1

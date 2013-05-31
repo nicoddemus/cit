@@ -2,6 +2,7 @@
 <project>
   <actions/>
   <description></description>
+  <displayName>SS win32</displayName>
   <keepDependencies>false</keepDependencies>
   <properties>
     <hudson.model.ParametersDefinitionProperty>

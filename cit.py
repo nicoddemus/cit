@@ -229,7 +229,7 @@ def cit_install(global_config_file, stdin):
     print '=' * 60
     print 'Configuration'
     print '=' * 60
-    sys.stdout.write('- Jenkins URL:   ')
+    sys.stdout.write('- Enter Jenkins URL:   ')
     jenkins_url = stdin.readline().strip()
     if not jenkins_url.startswith('http'):
         jenkins_url = 'http://' + jenkins_url

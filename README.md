@@ -4,39 +4,34 @@ Command line tool for interacting with a continuous integration server.
 
 ## Installing
 
-1. Create the folder where cit will be installed.
+1. Clone the repository:
 
 ```
-c:\cit
+git clone https://github.com/nicoddemus/cit.git
 ```
 
-
-2. Copy file `cit_install.py` to cit folder.
-
-```
-curl -O https://raw.github.com/nicoddemus/cit/master/cit_install.py
-```
-
-or 
+2. Execute `python install.py` in the directory to fetch dependencies and execute initial configuration.
 
 ```
-wget https://raw.github.com/nicoddemus/cit/master/cit_install.py
+cd cit
+python install.py
 ```
 
-3. Run cit installation. As part of installation process you will be promped to provide Jenkins server address; just copy/paste the server directly from the browser and it should be OK.
+As part of installation process you will be promped to provide Jenkins server address: 
 
 ```
-  python c:\cit\cit_install.py
-  --> pyyaml
-  # snip lots of output
+============================================================
+Configuration
+============================================================
+- Enter Jenkins URL:   
+```
 
-  ============================================================
-  Configuring:
-  ============================================================
-  Jenkins URL (make sure to include http:// or https://): http://10.0.0.9:9090/
-  Written configuration to: c:\cit\citconfig.yaml
-  
-  Checking if Jenkins server is correct... OK
+just copy/paste the server directly from the browser and it should be OK.
+
+```
+- Jenkins URL:   http://localhost:8080
+
+Checking Jenkins server... OK
 ```
 
 ## Commands

@@ -50,8 +50,9 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
         status = 'UPDATED'
         
     print '%s => %s (%s)' % (job_name, new_job_name, status)
-        
-    tree = ET.fromstring(job.get_config())
+    
+    original_job = jenkins.get_job(job_name)
+    tree = ET.fromstring(original_job.get_config())
     
     branch_elements = list(tree.findall('.//hudson.plugins.git.BranchSpec/name'))
     if len(branch_elements) > 0:

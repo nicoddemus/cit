@@ -1,0 +1,7 @@
+[submodule "pyyaml"]
+	path = pyyaml
+	url = http://github.com/yaml/pyyaml.git
+    ignore = dirty
+[submodule "jenkinsapi"]
+	path = jenkinsapi
+	url = http://github.com/salimfadhley/jenkinsapi

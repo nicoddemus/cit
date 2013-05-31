@@ -1,12 +1,33 @@
 from __future__ import with_statement
-from jenkinsapi.jenkins import Jenkins
+
+#===================================================================================================
+# configure_submodules_path
+#===================================================================================================
+def configure_submodules_path():
+    '''
+    Configures sys.path to detect our submodule dependencies. Must be called before trying to do
+    any other imports.
+    '''
+    import sys, os
+    
+    directory = os.path.abspath(os.path.dirname(__file__))
+    sys.path.insert(0, os.path.join(directory, 'jenkinsapi'))
+    sys.path.insert(0, os.path.join(directory, 'pyyaml', 'lib'))
+    
+configure_submodules_path()
+
+#===================================================================================================
+# imports
+#===================================================================================================
 from jenkinsapi.exceptions import UnknownJob
+from jenkinsapi.jenkins import Jenkins
+import contextlib
+import jenkinsapi
+import subprocess
 import xml.etree.ElementTree as ET
+import yaml
 import os
 import sys
-import yaml
-import subprocess
-import contextlib
 
 
 #===================================================================================================

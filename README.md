@@ -40,7 +40,7 @@ Following there is a quick overview about main commands.
 
 ### init
 
-This command is responsible for configuring Jenkins jobs. The command will ask you the name of the source job, which is be taken a template for feature jobs. After that you have to inform the job name pattern.
+This command is responsible for configuring Jenkins jobs. The command will ask you the name of the source job, which will be taken as a template for feature jobs. After that you have to inform the job name pattern.
 
 Tips:
 * You can insert as many job templates as you want (e.g. one for each platform).

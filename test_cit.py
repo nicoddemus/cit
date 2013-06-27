@@ -39,21 +39,54 @@ def tmp_job_name():
     job.update_config(config) 
     
     return job_name
+
+
+#===================================================================================================
+# change_cwd
+#===================================================================================================
+@pytest.fixture
+def change_cwd(tmpdir):
+    '''
+    creates a suitable source directory to ensure our configuration suite is being found and loaded
+    correctly. 
+    
+    :return: working directory, as a sub-directory of the given temp dir 
+    '''
+    os.makedirs(str(tmpdir.join('.git')))
+    
+    cwd = str(tmpdir.join('src', 'plk'))
+    os.makedirs(cwd)
+    os.chdir(cwd)
+    
+    
+#===================================================================================================
+# global_config_file
+#===================================================================================================
+@pytest.fixture
+def global_config_file(tmpdir):    
+    '''
+    fixture that initializes a config file in the given temp directory. Useful to test cit 
+    commands when it has already been correctly configured. 
+    '''
+    global_config_file = str(tmpdir.join('citconfig.yaml'))
+    global_config = {'jenkins' : {'url' : JENKINS_URL}}
+    yaml.dump(global_config, file(global_config_file, 'w'))
+    return global_config_file
     
 
 #===================================================================================================
 # test_add
 #===================================================================================================
+@pytest.mark.usefixtures('change_cwd')
 @pytest.mark.parametrize('branch', ['new-feature', None])
-def test_add(tmp_job_name, tmpdir, branch):
-    cwd = str(tmpdir.join('.git', 'src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
+def test_add(tmp_job_name, tmpdir, global_config_file, branch):
+    '''
+    test command "add"
     
-    global_config_file = str(tmpdir.join('citconfig.yaml'))
-    global_config = {'jenkins' : {'url' : JENKINS_URL}}
-    yaml.dump(global_config, file(global_config_file, 'w'))
-    
+    :param branch: 
+        parametrized to test adding passing a branch name in the command line and without
+        (which means "use current branch as branch name") 
+    '''
     cit_config = {
         'jobs' : [{
             'source-job' : tmp_job_name,
@@ -115,15 +148,8 @@ def test_add(tmp_job_name, tmpdir, branch):
 #===================================================================================================
 # test_cit_init
 #===================================================================================================
-def test_cit_init(tmpdir, capsys):    
-    cwd = str(tmpdir.join('.git', 'src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
-    
-    global_config_file = str(tmpdir.join('citconfig.yaml'))
-    global_config = {'jenkins' : {'url' : JENKINS_URL}}
-    yaml.dump(global_config, file(global_config_file, 'w'))
-    
+@pytest.mark.usefixtures('change_cwd')
+def test_cit_init(tmpdir, global_config_file):    
     input_lines = [
         'project_win32', 
         'project_$name_win32',
@@ -157,11 +183,8 @@ def test_cit_init(tmpdir, capsys):
 #===================================================================================================
 # test_cit_install
 #===================================================================================================
+@pytest.mark.usefixtures('change_cwd')
 def test_cit_install(tmpdir):    
-    cwd = str(tmpdir.join('src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
-    
     global_config_file = tmpdir.join('citconfig.yaml')
     
     input_lines = [

@@ -98,3 +98,21 @@ Usage:
 ```
 cit start my_feature_branch
 ```
+
+## Developing
+
+Information about developing cit.
+
+### Testing
+
+pytest (pytest.org) is used for testing, so executing the test suite is simple as:
+
+```
+py.test 
+```
+ 
+Some tests require a Jenkins server running at the local machine. To run these tests execute:
+
+```
+py.test --jenkins-available
+```

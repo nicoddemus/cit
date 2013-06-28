@@ -1,4 +1,3 @@
-
 #===================================================================================================
 # pytest_addoption
 #===================================================================================================
@@ -11,5 +10,5 @@ def pytest_addoption(parser):
         "--jenkins-available", 
         action="store_true", 
         default=False,
-        help="if tests with real a jenkins server should be executed",
+        help="if tests with a real jenkins server should be executed",
     )

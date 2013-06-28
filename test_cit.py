@@ -1,6 +1,6 @@
 from __future__ import with_statement
+import cit # must be imported first to install submodules on PYTHONPATH
 from jenkinsapi.jenkins import Jenkins
-import cit
 import hashlib
 import os
 import pytest

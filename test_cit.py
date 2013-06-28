@@ -1,6 +1,6 @@
 from __future__ import with_statement
+import cit # must be imported first to install submodules on PYTHONPATH
 from jenkinsapi.jenkins import Jenkins
-import cit
 import hashlib
 import os
 import pytest
@@ -15,19 +15,10 @@ JENKINS_URL = 'http://localhost:8080'
 JOB_TEST_PREFIX = 'cit-test-job-'
 
 #===================================================================================================
-# teardown_module
-#===================================================================================================
-def teardown_module(module):
-    jenkins = Jenkins(JENKINS_URL)
-    for name, job in jenkins.get_jobs():
-        if name.startswith(JOB_TEST_PREFIX):
-            jenkins.delete_job(name)
-
-#===================================================================================================
 # jenkins
 #===================================================================================================
 @pytest.fixture
-def tmp_job_name():
+def tmp_job_name(request):
     config = file(os.path.join(os.path.dirname(__file__), 'test_config.xml')).read()
     
     jenkins = Jenkins(JENKINS_URL)
@@ -38,22 +29,66 @@ def tmp_job_name():
     job = jenkins.create_job(job_name, config)
     job.update_config(config) 
     
+    def delete_test_jobs():
+        '''
+        finalizer for this fixture that removes left-over test jobs from the live jenkins server.
+        '''
+        jenkins = Jenkins(JENKINS_URL)
+        for name, job in jenkins.get_jobs():
+            if name.startswith(JOB_TEST_PREFIX):
+                jenkins.delete_job(name)
+                
+    request.addfinalizer(delete_test_jobs)
     return job_name
+
+
+#===================================================================================================
+# change_cwd
+#===================================================================================================
+@pytest.fixture
+def change_cwd(tmpdir):
+    '''
+    creates a suitable source directory to ensure our configuration suite is being found and loaded
+    correctly. 
+    
+    :return: working directory, as a sub-directory of the given temp dir 
+    '''
+    os.makedirs(str(tmpdir.join('.git')))
+    
+    cwd = str(tmpdir.join('src', 'plk'))
+    os.makedirs(cwd)
+    os.chdir(cwd)
+    
+    
+#===================================================================================================
+# global_config_file
+#===================================================================================================
+@pytest.fixture
+def global_config_file(tmpdir):    
+    '''
+    fixture that initializes a config file in the given temp directory. Useful to test cit 
+    commands when it has already been correctly configured. 
+    '''
+    global_config_file = str(tmpdir.join('citconfig.yaml'))
+    global_config = {'jenkins' : {'url' : JENKINS_URL}}
+    yaml.dump(global_config, file(global_config_file, 'w'))
+    return global_config_file
     
 
 #===================================================================================================
 # test_add
 #===================================================================================================
+@pytest.mark.skipif('not config.option.jenkins_available')
+@pytest.mark.usefixtures('change_cwd')
 @pytest.mark.parametrize('branch', ['new-feature', None])
-def test_add(tmp_job_name, tmpdir, branch):
-    cwd = str(tmpdir.join('.git', 'src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
+def test_add(tmp_job_name, tmpdir, global_config_file, branch):
+    '''
+    test command "add"
     
-    global_config_file = str(tmpdir.join('citconfig.yaml'))
-    global_config = {'jenkins' : {'url' : JENKINS_URL}}
-    yaml.dump(global_config, file(global_config_file, 'w'))
-    
+    :param branch: 
+        parametrized to test adding passing a branch name in the command line and without
+        (which means "use current branch as branch name") 
+    '''
     cit_config = {
         'jobs' : [{
             'source-job' : tmp_job_name,
@@ -115,15 +150,8 @@ def test_add(tmp_job_name, tmpdir, branch):
 #===================================================================================================
 # test_cit_init
 #===================================================================================================
-def test_cit_init(tmpdir, capsys):    
-    cwd = str(tmpdir.join('.git', 'src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
-    
-    global_config_file = str(tmpdir.join('citconfig.yaml'))
-    global_config = {'jenkins' : {'url' : JENKINS_URL}}
-    yaml.dump(global_config, file(global_config_file, 'w'))
-    
+@pytest.mark.usefixtures('change_cwd')
+def test_cit_init(tmpdir, global_config_file):    
     input_lines = [
         'project_win32', 
         'project_$name_win32',
@@ -157,11 +185,8 @@ def test_cit_init(tmpdir, capsys):
 #===================================================================================================
 # test_cit_install
 #===================================================================================================
+@pytest.mark.usefixtures('change_cwd')
 def test_cit_install(tmpdir):    
-    cwd = str(tmpdir.join('src', 'plk'))
-    os.makedirs(cwd)
-    os.chdir(cwd)
-    
     global_config_file = tmpdir.join('citconfig.yaml')
     
     input_lines = [

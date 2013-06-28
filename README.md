@@ -2,6 +2,13 @@
 
 Command line tool for interacting with a continuous integration server. 
 
+[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit) 
+
+## Requirements
+
+* Python 2.5, 2.6 or 2.7;
+* [simplejson](https://github.com/simplejson/simplejson);
+
 ## Installing
 
 1. Clone the repository:
@@ -97,4 +104,22 @@ Usage:
 
 ```
 cit start my_feature_branch
+```
+
+## Developing
+
+Information about developing cit.
+
+### Testing
+
+pytest (pytest.org) is used for testing, so executing the test suite is simple as:
+
+```
+py.test 
+```
+ 
+Some tests require a Jenkins server running at the local machine. To run these tests execute:
+
+```
+py.test --jenkins-available
 ```

@@ -15,19 +15,10 @@ JENKINS_URL = 'http://localhost:8080'
 JOB_TEST_PREFIX = 'cit-test-job-'
 
 #===================================================================================================
-# teardown_module
-#===================================================================================================
-def teardown_module(module):
-    jenkins = Jenkins(JENKINS_URL)
-    for name, job in jenkins.get_jobs():
-        if name.startswith(JOB_TEST_PREFIX):
-            jenkins.delete_job(name)
-
-#===================================================================================================
 # jenkins
 #===================================================================================================
 @pytest.fixture
-def tmp_job_name():
+def tmp_job_name(request):
     config = file(os.path.join(os.path.dirname(__file__), 'test_config.xml')).read()
     
     jenkins = Jenkins(JENKINS_URL)
@@ -38,6 +29,16 @@ def tmp_job_name():
     job = jenkins.create_job(job_name, config)
     job.update_config(config) 
     
+    def delete_test_jobs():
+        '''
+        finalizer for this fixture that removes left-over test jobs from the live jenkins server.
+        '''
+        jenkins = Jenkins(JENKINS_URL)
+        for name, job in jenkins.get_jobs():
+            if name.startswith(JOB_TEST_PREFIX):
+                jenkins.delete_job(name)
+                
+    request.addfinalizer(delete_test_jobs)
     return job_name
 
 

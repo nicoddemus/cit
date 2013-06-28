@@ -2,6 +2,11 @@
 
 Command line tool for interacting with a continuous integration server. 
 
+## Requirements
+
+* Python 2.5, 2.6 or 2.7;
+* [simplejson](https://github.com/simplejson/simplejson);
+
 ## Installing
 
 1. Clone the repository:

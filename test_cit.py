@@ -77,6 +77,7 @@ def global_config_file(tmpdir):
 #===================================================================================================
 # test_add
 #===================================================================================================
+@pytest.mark.skipif('not config.option.jenkins_available')
 @pytest.mark.usefixtures('change_cwd')
 @pytest.mark.parametrize('branch', ['new-feature', None])
 def test_add(tmp_job_name, tmpdir, global_config_file, branch):

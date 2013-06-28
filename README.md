@@ -2,6 +2,8 @@
 
 Command line tool for interacting with a continuous integration server. 
 
+[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit) 
+
 ## Requirements
 
 * Python 2.5, 2.6 or 2.7;

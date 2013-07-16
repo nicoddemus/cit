@@ -1,4 +1,8 @@
 from __future__ import with_statement
+import glob
+import re
+
+
 
 #===================================================================================================
 # configure_submodules_path
@@ -108,6 +112,80 @@ def cit_add(branch, global_config):
     for job_name, new_job_name in get_configured_jobs(branch, job_config):
         user_name, user_email = get_git_user(cit_file_name)
         create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_email)
+
+
+#===================================================================================================
+# cit_up_from_dir
+#===================================================================================================
+def cit_up_from_dir(directory, global_config):
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+
+    directory = directory or 'hudson'
+    if not os.path.exists(directory):
+        print 'Directory not found: %r' % directory
+        return
+
+    jobs_to_update = {}
+    for dir_name in glob.glob(directory + '/*'):
+        # Ignore all files
+        if not os.path.isdir(dir_name):
+            continue
+
+        job_name = os.path.basename(dir_name)
+        xml_filename = os.path.join(dir_name, 'config.xml')
+        has_config = os.path.exists(xml_filename)
+        if not has_config:
+            print 'Missing %r' % dir_name
+            continue
+
+        if jenkins.has_job(job_name):
+            print 'Updating: %r' % job_name
+            jobs_to_update[job_name] = False, xml_filename
+        else:
+            print 'Creating: %r' % job_name
+            jobs_to_update[job_name] = True, xml_filename
+
+    if len(jobs_to_update) > 0:
+        ans = raw_input('Update/Create jobs (yes|no): ')
+        if ans.startswith('y'):
+            for job_name, (create_job, xml_filename) in jobs_to_update.iteritems():
+                config_xml = file(xml_filename).read()
+                if create_job:
+                    job = jenkins.create_job(job_name, config_xml)
+                else:
+                    job = jenkins.get_job(job_name)
+                    job.update_config(config_xml)
+
+
+#===================================================================================================
+# cit_delete_jobs
+#===================================================================================================
+def cit_delete_jobs(pattern, global_config, use_re=False):
+    import fnmatch
+
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+
+    jobs_to_delete = []
+
+    regex = re.compile(pattern)
+    def Match(job_name):
+        if use_re:
+            return regex.match(job_name)
+        else:
+            return fnmatch.fnmatch(jobname, pattern)
+
+    for jobname in jenkins.iterkeys():
+        if Match(jobname):
+            print '\t', jobname
+            jobs_to_delete.append(jobname)
+
+    if len(jobs_to_delete) > 0:
+        ans = raw_input("Delete jobs?(yes|no): ")
+        if ans.startswith('y'):
+            for jobname in jobs_to_delete:
+                jenkins.delete_job(jobname)
 
 
 #===================================================================================================
@@ -296,6 +374,27 @@ def load_cit_local_config(from_dir):
     return cit_file_name, config
 
 
+def parse_args():
+    from optparse import OptionParser
+
+    usage = "usage: %prog <filename> [options]"
+    parser = OptionParser(usage=usage, version='0.2')
+    parser.add_option(
+        "-p", "--pattern", dest="pattern",
+        help="Job name match pattern"
+    )
+    parser.add_option(
+        "-d", "--directory", dest="directory",
+        help="Local directory to search for jobs"
+    )
+    parser.add_option(
+        "--re", action="store_true", dest="use_re", default=False,
+        help="Use Regular Expressions"
+    )
+
+    return parser.parse_args()
+
+
 #===================================================================================================
 # main
 #===================================================================================================
@@ -339,6 +438,23 @@ def main(argv, global_config_file=None, stdin=None):
             cit_rm(branch, global_config)
         return RETURN_CODE_OK
     else:
+        (options, args) = parse_args()
+        if len(args) == 1:
+            cmd = args[0]
+            if cmd == 'upd':
+                directory = options.directory
+                cit_up_from_dir(directory, global_config)
+                return RETURN_CODE_OK
+
+            elif cmd == 'del':
+                pattern = options.pattern
+                if pattern is None:
+                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
+                else:
+                    cit_delete_jobs(pattern, global_config, use_re=options.use_re)
+
+                return RETURN_CODE_OK
+
         print 'Unknown command: "%s"' % argv[1]
         print_help()
         return RETURN_CODE_UNKNOWN_COMMAND
@@ -364,6 +480,11 @@ def print_help():
     print '    start [BRANCH]         starts a new build for the given feature branch'
     print '    rm [BRANCH]            removes job for feature branches given'
     print
+    print 'Specials:'
+    print
+    print '    upd -d $(dir_name)           Update or create jobs from the sub directories in $(dir_name)'
+    print '    del -p $(search_pattern)     Delete jobs from the server that matches the given pattern'
+    print '        --re                     match jobs using a regular expression'
 
 
 #===================================================================================================

@@ -195,7 +195,7 @@ def cit_delete_jobs(pattern, global_config, use_re=False):
         if ans.startswith('y'):
             for jobname in jobs_to_delete:
                 print 'Deleting: %r' % jobname
-#                 jenkins.delete_job(jobname)
+                jenkins.delete_job(jobname)
 
 
 #===================================================================================================

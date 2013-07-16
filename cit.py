@@ -159,9 +159,9 @@ def cit_up_from_dir(directory, global_config):
 
 
 #===================================================================================================
-# cit_delete_jobs
+# cit_list_jobs
 #===================================================================================================
-def cit_delete_jobs(pattern, global_config, use_re=False):
+def cit_list_jobs(pattern, global_config, use_re=False, print_list=True):
     import fnmatch
 
     jenkins_url = global_config['jenkins']['url']
@@ -181,11 +181,21 @@ def cit_delete_jobs(pattern, global_config, use_re=False):
             print '\t', jobname
             jobs_to_delete.append(jobname)
 
+    return jenkins, jobs_to_delete
+
+
+#===================================================================================================
+# cit_delete_jobs
+#===================================================================================================
+def cit_delete_jobs(pattern, global_config, use_re=False):
+    jenkins, jobs_to_delete = cit_list_jobs(pattern, global_config, use_re, print_list=True)
+
     if len(jobs_to_delete) > 0:
-        ans = raw_input("Delete jobs?(yes|no): ")
+        ans = raw_input("Delete jobs?(y|n): ")
         if ans.startswith('y'):
             for jobname in jobs_to_delete:
-                jenkins.delete_job(jobname)
+                print 'Deleting: %r' % jobname
+#                 jenkins.delete_job(jobname)
 
 
 #===================================================================================================
@@ -439,21 +449,36 @@ def main(argv, global_config_file=None, stdin=None):
         return RETURN_CODE_OK
     else:
         (options, args) = parse_args()
-        if len(args) == 1:
-            cmd = args[0]
-            if cmd == 'upd':
-                directory = options.directory
-                cit_up_from_dir(directory, global_config)
-                return RETURN_CODE_OK
+        cmd = args[0]
+        if cmd == 'upd':
+            directory = options.directory
+            cit_up_from_dir(directory, global_config)
+            return RETURN_CODE_OK
 
-            elif cmd == 'del':
-                pattern = options.pattern
-                if pattern is None:
-                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
+        elif cmd == 'ls':
+            pattern = options.pattern
+            if pattern is None:
+                if len(args) > 1:
+                    pattern = args[1]
                 else:
-                    cit_delete_jobs(pattern, global_config, use_re=options.use_re)
+                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
+                    return RETURN_CODE_OK
 
+            cit_list_jobs(pattern, global_config, use_re=options.use_re)
+
+            return RETURN_CODE_OK
+
+        elif cmd == 'del':
+            pattern = options.pattern
+            if len(args) > 1:
+                pattern = args[1]
+            else:
+                print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
                 return RETURN_CODE_OK
+
+            cit_delete_jobs(pattern, global_config, use_re=options.use_re)
+
+            return RETURN_CODE_OK
 
         print 'Unknown command: "%s"' % argv[1]
         print_help()

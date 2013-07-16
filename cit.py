@@ -1,6 +1,7 @@
 from __future__ import with_statement
 import glob
 import re
+import time
 
 
 
@@ -114,6 +115,27 @@ def cit_add(branch, global_config):
         create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_email)
 
 
+def cit_get_job_status(job_name, job, job_index=None):
+    try:
+        build = job.get_last_build()
+    except:
+        status = 'NONE'
+        if job.is_running():
+            status = 'Running'
+        timestamp = '-'
+    else:
+        if build.is_running():
+            status = 'RUNNING'
+        else:
+            status = build.get_status()
+        # get_timestamp - the number of milliseconds since January 1, 1970, 00:00:00 GMT represented by this date.
+        timestamp = str(time.ctime(build.get_timestamp() / 1000.0))
+
+    if job_index is None:
+        job_index = ''
+    return '%2s %10s (%25s) - %s' % (job_index, status, timestamp, job_name)
+
+
 #===================================================================================================
 # cit_up_from_dir
 #===================================================================================================
@@ -161,13 +183,11 @@ def cit_up_from_dir(directory, global_config):
 #===================================================================================================
 # cit_list_jobs
 #===================================================================================================
-def cit_list_jobs(pattern, global_config, use_re=False, print_list=True):
+def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_status=True):
     import fnmatch
 
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
-
-    jobs_to_delete = []
 
     regex = re.compile(pattern)
     def Match(job_name):
@@ -176,24 +196,47 @@ def cit_list_jobs(pattern, global_config, use_re=False, print_list=True):
         else:
             return fnmatch.fnmatch(jobname, pattern)
 
+    jobs = []
     for jobname in jenkins.iterkeys():
         if Match(jobname):
-            print '\t', jobname
-            jobs_to_delete.append(jobname)
+            job = jenkins.get_job(jobname)
+            if print_status:
+                print cit_get_job_status(jobname, job, len(jobs))
+            else:
+                print '\t', jobname
+            jobs.append((jobname, job))
 
-    return jenkins, jobs_to_delete
+    if invoke:
+        job_index = raw_input('Queue job? id = ')
+        if job_index:
+            try:
+                job_index = int(job_index)
+            except:
+                pass
+            else:
+
+                try:
+                    job_name, job = jobs[job_index]
+                except:
+                    pass
+                else:
+                    print 'Invoking job: %r' % jobs[job_index][0]
+                    job.invoke()
+
+    return jenkins, jobs
 
 
 #===================================================================================================
 # cit_delete_jobs
 #===================================================================================================
 def cit_delete_jobs(pattern, global_config, use_re=False):
-    jenkins, jobs_to_delete = cit_list_jobs(pattern, global_config, use_re, print_list=True)
+    jenkins, jobs_to_delete = cit_list_jobs(pattern, global_config, use_re, print_status=False)
 
     if len(jobs_to_delete) > 0:
+        print 'Found: %d jobs' % len(jobs_to_delete)
         ans = raw_input("Delete jobs?(y|n): ")
         if ans.startswith('y'):
-            for jobname in jobs_to_delete:
+            for jobname, job in jobs_to_delete:
                 print 'Deleting: %r' % jobname
                 jenkins.delete_job(jobname)
 
@@ -464,7 +507,7 @@ def main(argv, global_config_file=None, stdin=None):
                     print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
                     return RETURN_CODE_OK
 
-            cit_list_jobs(pattern, global_config, use_re=options.use_re)
+            cit_list_jobs(pattern, global_config, invoke=True, use_re=options.use_re)
 
             return RETURN_CODE_OK
 
@@ -507,9 +550,10 @@ def print_help():
     print
     print 'Specials:'
     print
-    print '    upd -d $(dir_name)           Update or create jobs from the sub directories in $(dir_name)'
-    print '    del -p $(search_pattern)     Delete jobs from the server that matches the given pattern'
+    print '    upd -d $(dir_name)       Update or create jobs from the sub directories in $(dir_name)'
+    print '    del $(search_pattern)    Delete jobs from the server that matches the given pattern'
     print '        --re                     match jobs using a regular expression'
+    print '    ls $(search_pattern)     List jobs from the server that matches the given pattern'
 
 
 #===================================================================================================

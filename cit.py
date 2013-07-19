@@ -181,6 +181,32 @@ def cit_up_from_dir(directory, global_config):
 
 
 #===================================================================================================
+# cit_down_to_dir
+#===================================================================================================
+def cit_down_to_dir(directory, pattern, global_config, use_re=False):
+    
+    jenkins, jobs_to_download = cit_list_jobs(pattern, global_config, use_re=use_re, print_status=False)
+    
+    print 'Found: %d jobs' % len(jobs_to_download)
+    ans = raw_input("Download jobs?(y|n): ")
+    
+    if not ans.lower().startswith('y'):
+        return
+        
+    directory = directory or 'hudson'
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+
+    for jobname, job in jobs_to_download:
+        print 'Downloading: %r' % jobname
+        job_dir = os.path.join(directory, jobname) 
+        os.mkdir(job_dir)
+        xml_filename = os.path.join(job_dir, 'config.xml')
+        job_xml = job.get_config()
+        file(xml_filename, 'w').write(job_xml)
+
+
+#===================================================================================================
 # cit_list_jobs
 #===================================================================================================
 def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_status=True):
@@ -498,6 +524,19 @@ def main(argv, global_config_file=None, stdin=None):
             cit_up_from_dir(directory, global_config)
             return RETURN_CODE_OK
 
+        elif cmd == 'dtd':
+            directory = options.directory
+            pattern = options.pattern
+            if pattern is None:
+                if len(args) > 1:
+                    pattern = args[1]
+                else:
+                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
+                    return RETURN_CODE_OK
+
+            cit_down_to_dir(directory, pattern, global_config, use_re=options.use_re)
+            return RETURN_CODE_OK
+
         elif cmd == 'ls':
             pattern = options.pattern
             if pattern is None:
@@ -551,6 +590,7 @@ def print_help():
     print 'Specials:'
     print
     print '    upd -d $(dir_name)       Update or create jobs from the sub directories in $(dir_name)'
+    print '    dtd $(search_pattern) -d $(dir_name)       Download jobs to sub directories in $(dir_name)'
     print '    del $(search_pattern)    Delete jobs from the server that matches the given pattern'
     print '        --re                     match jobs using a regular expression'
     print '    ls $(search_pattern)     List jobs from the server that matches the given pattern'

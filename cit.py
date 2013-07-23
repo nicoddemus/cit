@@ -232,22 +232,47 @@ def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_stat
                 print '\t', jobname
             jobs.append((jobname, job))
 
-    if invoke:
-        job_index = raw_input('Queue job? id = ')
-        if job_index:
+    def DeleteJobs(jobs):
+        while True:
+            job_index = raw_input('Delete job? id = ')
             try:
                 job_index = int(job_index)
             except:
-                pass
+                break
             else:
-
                 try:
                     job_name, job = jobs[job_index]
                 except:
                     pass
                 else:
-                    print 'Invoking job: %r' % jobs[job_index][0]
-                    job.invoke()
+                    ans = raw_input('Delete job (y(es)|n(o)? %r: ' % job_name).lower()
+                    if ans.startswith('y'):
+                        jenkins.delete_job(job_name)
+        
+    if invoke:
+        ans = raw_input('Select an operation? (e(xit) | d(elete)| i(nvoke): ').lower()
+        if not ans or ans.startswith('e'):
+            return
+        
+        elif ans.startswith('d'):
+            DeleteJobs(jobs)
+        
+        elif ans.startswith('i'):
+            job_index = raw_input('Invoke job? id = ')
+            if job_index:
+                try:
+                    job_index = int(job_index)
+                except:
+                    pass
+                else:
+    
+                    try:
+                        job_name, job = jobs[job_index]
+                    except:
+                        pass
+                    else:
+                        print 'Invoking job: %r' % jobs[job_index][0]
+                        job.invoke()
 
     return jenkins, jobs
 

@@ -125,7 +125,7 @@ def test_add(tmp_job_name, tmpdir, global_config_file, branch):
     display_name_elements = list(config.findall('.//displayName'))
     assert len(display_name_elements) == 1
     display_name_element = display_name_elements[0]
-    assert display_name_element.text == 'SS win32 (%s)' % branch
+    assert display_name_element.text == '(%s) SS win32' % branch
     
     # ensure we have set the user email recipient
     recipient_elements = list(config.findall('.//hudson.tasks.Mailer/recipients'))

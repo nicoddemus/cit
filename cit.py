@@ -137,9 +137,46 @@ def cit_get_job_status(job_name, job, job_index=None):
 
 
 #===================================================================================================
+# JobInfo
+#===================================================================================================
+class JobInfo(object):
+    
+    REGEX_JOB_NAME = re.compile('(.+__)(\d{2})-(.+)')
+                
+    def __init__(self, directory):
+        '''
+        
+        :param directory:
+        '''
+        self.directory = directory
+        self.name = os.path.basename(directory)
+        config_filename = os.path.join(directory, 'config.xml')
+        if os.path.exists(config_filename):
+            self.config_filename = config_filename
+        else:
+            self.config_filename = None
+        
+    def BaseName(self):
+        '''
+        :return str: The job name without it's index  
+        '''
+        match = self.REGEX_JOB_NAME.match(self.name)
+        if match:
+            return match.group(1) + match.group(3)
+    
+    def SearchPattern(self):
+        '''
+        :return str: THe pattern to list the jobs
+        '''
+        match = self.REGEX_JOB_NAME.match(self.name)
+        if match:
+            return match.group(1) + '*'
+        
+
+#===================================================================================================
 # cit_up_from_dir
 #===================================================================================================
-def cit_up_from_dir(directory, global_config):
+def cit_up_from_dir(directory, global_config, reindex=True):
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
 
@@ -148,36 +185,82 @@ def cit_up_from_dir(directory, global_config):
         print 'Directory not found: %r' % directory
         return
 
-    jobs_to_update = {}
+    search_pattern = None
+    local_jobs = []
     for dir_name in glob.glob(directory + '/*'):
         # Ignore all files
         if not os.path.isdir(dir_name):
             continue
 
-        job_name = os.path.basename(dir_name)
-        xml_filename = os.path.join(dir_name, 'config.xml')
-        has_config = os.path.exists(xml_filename)
-        if not has_config:
-            print 'Missing %r' % dir_name
+        job_info = JobInfo(dir_name)
+        if job_info.config_filename is None:
+            print 'Missing config.xml file from %r' % dir_name
             continue
-
-        if jenkins.has_job(job_name):
-            print 'Updating: %r' % job_name
-            jobs_to_update[job_name] = False, xml_filename
+        
+        if reindex:
+            if search_pattern is None:
+                search_pattern = job_info.SearchPattern()
+            elif search_pattern != job_info.SearchPattern():
+                raise ValueError('Bad job names pattern: %r != %r' % (search_pattern, job_info.SearchPattern()))
+        
+        job_info.update = jenkins.has_job(job_info.name)
+        local_jobs.append(job_info)
+        
+    rename_jobs = {}
+    delete_jobs = []
+    if reindex:
+        remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
+        remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
+        
+        for job_info in local_jobs:
+            base_name = job_info.BaseName()
+            remote_job = remote_basenames.pop(base_name, None)
+            if remote_job is not None and remote_job.name != job_info.name:
+                rename_jobs[job_info.name] = remote_job.name
+        
+        delete_jobs = [ji.name for ji in remote_basenames.itervalues()]
+        
+    for job_info in local_jobs:
+        if job_info.name in rename_jobs:
+            print 'Renaming %r -> %r' % (rename_jobs[job_info.name], job_info.name)
+            
+        elif job_info.update:
+            print 'Updating %r' % job_info.name
         else:
-            print 'Creating: %r' % job_name
-            jobs_to_update[job_name] = True, xml_filename
-
-    if len(jobs_to_update) > 0:
-        ans = raw_input('Update/Create jobs (yes|no): ')
+            print 'Creating %r' % job_info.name
+            
+    for job_name in delete_jobs:
+        print
+        print 'Deleting %r' % job_name
+        print
+            
+    if len(local_jobs) > 0:
+        ans = raw_input('Update jobs (y|*n): ')
         if ans.startswith('y'):
-            for job_name, (create_job, xml_filename) in jobs_to_update.iteritems():
-                config_xml = file(xml_filename).read()
-                if create_job:
-                    job = jenkins.create_job(job_name, config_xml)
-                else:
-                    job = jenkins.get_job(job_name)
+            for job_info in local_jobs:
+                config_xml = file(job_info.config_filename).read()
+                
+                if job_info.name in rename_jobs:
+                    remote_name = rename_jobs[job_info.name]
+                    print '\tUpdating job'
+                    job = jenkins.get_job(remote_job.name)
                     job.update_config(config_xml)
+                    
+                    print 'Renaming %r -> %r' % (remote_name, job_info.name)
+                    jenkins.rename_job(remote_name, job_info.name)
+                    
+                else:
+                    if job_info.update:
+                        print 'Updating %r' % job_info.name
+                        job = jenkins.get_job(job_info.name)
+                        job.update_config(config_xml)
+                    else:
+                        print 'Creating %r' % job_info.name
+                        job = jenkins.create_job(job_info.name, config_xml)
+
+            for job_name in delete_jobs:
+                print 'Deleting %r' % job_name
+                job = jenkins.delete_job(job_name)
 
 
 #===================================================================================================
@@ -188,7 +271,7 @@ def cit_down_to_dir(directory, pattern, global_config, use_re=False):
     jenkins, jobs_to_download = cit_list_jobs(pattern, global_config, use_re=use_re, print_status=False)
     
     print 'Found: %d jobs' % len(jobs_to_download)
-    ans = raw_input("Download jobs?(y|n): ")
+    ans = raw_input("Download jobs?(y|*n): ")
     
     if not ans.lower().startswith('y'):
         return
@@ -205,6 +288,31 @@ def cit_down_to_dir(directory, pattern, global_config, use_re=False):
         job_xml = job.get_config()
         file(xml_filename, 'w').write(job_xml)
 
+
+def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
+    '''
+    :param jenkins:
+    '''
+    import fnmatch
+    
+    if jenkins is None:
+        jenkins_url = global_config['jenkins']['url']
+        jenkins = Jenkins(jenkins_url)
+
+    regex = re.compile(pattern)
+    def Match(job_name):
+        if use_re:
+            return regex.match(job_name)
+        else:
+            return fnmatch.fnmatch(jobname, pattern)
+
+    jobs = []
+    for jobname in jenkins.iterkeys():
+        if Match(jobname):
+            jobs.append(JobInfo(jobname))
+            
+    return jobs
+    
 
 #===================================================================================================
 # cit_list_jobs
@@ -245,12 +353,12 @@ def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_stat
                 except:
                     pass
                 else:
-                    ans = raw_input('Delete job (y(es)|n(o)? %r: ' % job_name).lower()
+                    ans = raw_input('Delete job (y(es)|*n(o)? %r: ' % job_name).lower()
                     if ans.startswith('y'):
                         jenkins.delete_job(job_name)
         
     if invoke:
-        ans = raw_input('Select an operation? (e(xit) | d(elete)| i(nvoke): ').lower()
+        ans = raw_input('Select an operation? (*e(xit) | d(elete)| i(nvoke): ').lower()
         if not ans or ans.startswith('e'):
             return
         
@@ -285,7 +393,7 @@ def cit_delete_jobs(pattern, global_config, use_re=False):
 
     if len(jobs_to_delete) > 0:
         print 'Found: %d jobs' % len(jobs_to_delete)
-        ans = raw_input("Delete jobs?(y|n): ")
+        ans = raw_input("Delete jobs?(y|*n): ")
         if ans.startswith('y'):
             for jobname, job in jobs_to_delete:
                 print 'Deleting: %r' % jobname
@@ -478,7 +586,7 @@ def load_cit_local_config(from_dir):
     return cit_file_name, config
 
 
-def parse_args():
+def parse_args(argv):
     from optparse import OptionParser
 
     usage = "usage: %prog <filename> [options]"
@@ -495,8 +603,12 @@ def parse_args():
         "--re", action="store_true", dest="use_re", default=False,
         help="Use Regular Expressions"
     )
+    parser.add_option(
+        "--no-reindex", action="store_true", dest="no_reindex", default=False,
+        help="Don't try to re-index the jobs"
+    )
 
-    return parser.parse_args()
+    return parser.parse_args(argv[1:])
 
 
 #===================================================================================================
@@ -542,11 +654,16 @@ def main(argv, global_config_file=None, stdin=None):
             cit_rm(branch, global_config)
         return RETURN_CODE_OK
     else:
-        (options, args) = parse_args()
+        (options, args) = parse_args(argv)
         cmd = args[0]
         if cmd == 'upd':
             directory = options.directory
-            cit_up_from_dir(directory, global_config)
+            cit_up_from_dir(directory, global_config, reindex=not options.no_reindex)
+            return RETURN_CODE_OK
+
+        elif cmd == 'rid':
+            directory = options.directory
+            cit_reindex_from_dir(directory, global_config)
             return RETURN_CODE_OK
 
         elif cmd == 'dtd':
@@ -615,6 +732,7 @@ def print_help():
     print 'Specials:'
     print
     print '    upd -d $(dir_name)       Update or create jobs from the sub directories in $(dir_name)'
+    print '        --no-reindex             dont try to re-index the jobs'
     print '    dtd $(search_pattern) -d $(dir_name)       Download jobs to sub directories in $(dir_name)'
     print '    del $(search_pattern)    Delete jobs from the server that matches the given pattern'
     print '        --re                     match jobs using a regular expression'

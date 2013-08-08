@@ -207,15 +207,18 @@ def cit_up_from_dir(directory, global_config, reindex=True):
         local_jobs.append(job_info)
         
     rename_jobs = {}
+    delete_jobs = []
     if reindex:
         remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
         remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
         
         for job_info in local_jobs:
             base_name = job_info.BaseName()
-            remote_job = remote_basenames.get(base_name)
+            remote_job = remote_basenames.pop(base_name, None)
             if remote_job is not None and remote_job.name != job_info.name:
                 rename_jobs[job_info.name] = remote_job.name
+        
+        delete_jobs = [ji.name for ji in remote_basenames.itervalues()]
         
     for job_info in local_jobs:
         if job_info.name in rename_jobs:
@@ -226,8 +229,13 @@ def cit_up_from_dir(directory, global_config, reindex=True):
         else:
             print 'Creating %r' % job_info.name
             
+    for job_name in delete_jobs:
+        print
+        print 'Deleting %r' % job_name
+        print
+            
     if len(local_jobs) > 0:
-        ans = raw_input('Update jobs (y|n*): ')
+        ans = raw_input('Update jobs (y|*n): ')
         if ans.startswith('y'):
             for job_info in local_jobs:
                 config_xml = file(job_info.config_filename).read()
@@ -250,78 +258,9 @@ def cit_up_from_dir(directory, global_config, reindex=True):
                         print 'Creating %r' % job_info.name
                         job = jenkins.create_job(job_info.name, config_xml)
 
-
-#===================================================================================================
-# cit_reindex_from_dir
-#===================================================================================================
-def cit_reindex_from_dir(directory, global_config):
-    jenkins_url = global_config['jenkins']['url']
-    jenkins = Jenkins(jenkins_url)
-
-    directory = directory or 'hudson'
-    if not os.path.exists(directory):
-        print 'Directory not found: %r' % directory
-        return
-
-    search_pattern = None
-    local_jobs = []
-    for dir_name in glob.glob(directory + '/*'):
-        # Ignore all files
-        if not os.path.isdir(dir_name):
-            continue
-
-        job_info = JobInfo(dir_name)
-        if job_info.config_filename is None:
-            print 'Missing config.xml file from %r' % dir_name
-            continue
-        
-        if search_pattern is None:
-            search_pattern = job_info.SearchPattern()
-        elif search_pattern != job_info.SearchPattern():
-            raise ValueError('Bad job names pattern: %r != %r' % (search_pattern, job_info.SearchPattern()))
-        
-        local_jobs.append(job_info)
-        
-    remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
-    
-    remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
-    
-    for job_info in local_jobs:
-        base_name = job_info.BaseName()
-        remote_job = remote_basenames.get(base_name)
-        job_info.remote_job = None
-        if remote_job is None:
-            print 'Creating %r' % job_info.name
-            job_info.update = False
-        elif remote_job.name != job_info.name:
-            job_info.remote_job = remote_job
-            print 'Renaming %r -> %r' % (remote_job.name, job_info.name)
-        else:
-            print 'Updating %r' % job_info.name
-            job_info.update = True
-            
-    if len(local_jobs) > 0:
-        ans = raw_input('Update jobs (y|n*): ')
-        if ans.startswith('y'):
-            for job_info in local_jobs:
-                config_xml = file(job_info.config_filename).read()
-                if job_info.remote_job:
-                    remote_job = job_info.remote_job
-                    print '\tUpdating job'
-                    job = jenkins.get_job(remote_job.name)
-                    job.update_config(config_xml)
-                    
-                    print 'Renaming %r -> %r' % (remote_job.name, job_info.name)
-                    jenkins.rename_job(remote_job.name, job_info.name)
-                    
-                else:
-                    if job_info.update:
-                        print 'Updating %r' % job_info.name
-                        job = jenkins.get_job(job_info.name)
-                        job.update_config(config_xml)
-                    else:
-                        print 'Creating %r' % job_info.name
-                        job = jenkins.create_job(job_info.name, config_xml)
+            for job_name in delete_jobs:
+                print 'Deleting %r' % job_name
+                job = jenkins.delete_job(job_name)
 
 
 #===================================================================================================
@@ -332,7 +271,7 @@ def cit_down_to_dir(directory, pattern, global_config, use_re=False):
     jenkins, jobs_to_download = cit_list_jobs(pattern, global_config, use_re=use_re, print_status=False)
     
     print 'Found: %d jobs' % len(jobs_to_download)
-    ans = raw_input("Download jobs?(y|n): ")
+    ans = raw_input("Download jobs?(y|*n): ")
     
     if not ans.lower().startswith('y'):
         return
@@ -414,12 +353,12 @@ def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_stat
                 except:
                     pass
                 else:
-                    ans = raw_input('Delete job (y(es)|n(o)? %r: ' % job_name).lower()
+                    ans = raw_input('Delete job (y(es)|*n(o)? %r: ' % job_name).lower()
                     if ans.startswith('y'):
                         jenkins.delete_job(job_name)
         
     if invoke:
-        ans = raw_input('Select an operation? (e(xit) | d(elete)| i(nvoke): ').lower()
+        ans = raw_input('Select an operation? (*e(xit) | d(elete)| i(nvoke): ').lower()
         if not ans or ans.startswith('e'):
             return
         
@@ -454,7 +393,7 @@ def cit_delete_jobs(pattern, global_config, use_re=False):
 
     if len(jobs_to_delete) > 0:
         print 'Found: %d jobs' % len(jobs_to_delete)
-        ans = raw_input("Delete jobs?(y|n): ")
+        ans = raw_input("Delete jobs?(y|*n): ")
         if ans.startswith('y'):
             for jobname, job in jobs_to_delete:
                 print 'Deleting: %r' % jobname
@@ -716,7 +655,6 @@ def main(argv, global_config_file=None, stdin=None):
         return RETURN_CODE_OK
     else:
         (options, args) = parse_args(argv)
-        print options, args
         cmd = args[0]
         if cmd == 'upd':
             directory = options.directory

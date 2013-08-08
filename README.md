@@ -109,8 +109,14 @@ cit start [my_feature_branch]
 ### upd
 
 Uploads to Jenkins all jobs found in given directory. The given directory must contain a sub-directory for every job to be created or updated. 
-If there is a job of same name in Jenkins it updates, otherwise it creates a new job. Every job is configured by the use a XML configuration file 
-named `config.xml` that must be inside job's sub-directory. 
+If there is a job of same name in Jenkins it updates, otherwise it creates a new job.
+If Jenkins already have a job with the same name but with a different job index, the job will be renamed. To disable the search and rename just add the option --no-reindex to the command line.
+Every job is configured by the use a XML configuration file named `config.xml` that must be inside job's sub-directory.
+
+Note:
+
+The reindex feature compare all job names matching the given pattern: $(prefix)__00-$(name)
+The prefix will be used to list the existing jobs from Jenkins. 
 
 Usage:
 

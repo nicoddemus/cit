@@ -141,7 +141,7 @@ def cit_get_job_status(job_name, job, job_index=None):
 #===================================================================================================
 class JobInfo(object):
     
-    REGEX_JOB_NAME = re.compile('(.+__)(\d{2})-(.+)')
+    REGEX_JOB_NAME = re.compile(r'(.+__)(\d{2,3})-(.+)')
                 
     def __init__(self, directory):
         '''

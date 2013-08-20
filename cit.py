@@ -81,12 +81,6 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
         for elem in properties_elem.findall('./hudson.model.ParametersDefinitionProperty'):
             properties_elem.remove(elem)
 
-    # add a scm poll trigger for the build with 5 min intervals
-    triggers_elem = tree.find('./triggers')
-    scm_trigger = ET.SubElement(triggers_elem, 'hudson.triggers.SCMTrigger')
-    ET.SubElement(scm_trigger, 'spec')
-    ET.SubElement(scm_trigger, 'ignorePostCommitHooks').text = 'false'
-
     # remove build triggers after this job
     publishers_elem = tree.find('./publishers')
     if publishers_elem is not None:

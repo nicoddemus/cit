@@ -136,12 +136,7 @@ def test_add(tmp_job_name, tmpdir, global_config_file, branch):
     # ensure we don't have build parameters anymore
     params = list(config.findall('.//hudson.model.ParametersDefinitionProperty'))
     assert len(params) == 0
-    
-    # ensure triggered repository polling
-    triggers = list(config.findall('.//hudson.triggers.SCMTrigger'))
-    assert len(triggers) == 1
-    assert triggers[0].find('spec') is not None
-    
+
     # ensure no build is triggered after the job
     build_triggers = list(config.findall('.//hudson.tasks.BuildTrigger'))
     assert len(build_triggers) == 0

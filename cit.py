@@ -53,7 +53,7 @@ def get_command_args(opts):
     # read global config
     if not os.path.isfile(global_config_file):
         print >> sys.stderr, 'could not find cit config file at: %s' % global_config_file
-        return RETURN_CODE_CONFIG_NOT_FOUND
+        return 2
 
     global_config = yaml.load(file(global_config_file).read())
     
@@ -120,12 +120,6 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     if properties_elem is not None:
         for elem in properties_elem.findall('./hudson.model.ParametersDefinitionProperty'):
             properties_elem.remove(elem)
-
-    # add a scm poll trigger for the build with 5 min intervals
-    triggers_elem = tree.find('./triggers')
-    scm_trigger = ET.SubElement(triggers_elem, 'hudson.triggers.SCMTrigger')
-    ET.SubElement(scm_trigger, 'spec')
-    ET.SubElement(scm_trigger, 'ignorePostCommitHooks').text = 'false'
 
     # remove build triggers after this job
     publishers_elem = tree.find('./publishers')
@@ -383,10 +377,48 @@ def get_job_status(job_name, job, job_index=None):
 
 
 #===================================================================================================
+# JobInfo
+#===================================================================================================
+class JobInfo(object):
+    
+    REGEX_JOB_NAME = re.compile(r'(.+__)(\d{2,3})-(.+)')
+                
+    def __init__(self, directory):
+        '''
+        
+        :param directory:
+        '''
+        self.directory = directory
+        self.name = os.path.basename(directory)
+        config_filename = os.path.join(directory, 'config.xml')
+        if os.path.exists(config_filename):
+            self.config_filename = config_filename
+        else:
+            self.config_filename = None
+        
+    def BaseName(self):
+        '''
+        :return str: The job name without it's index  
+        '''
+        match = self.REGEX_JOB_NAME.match(self.name)
+        if match:
+            return match.group(1) + match.group(3)
+    
+    def SearchPattern(self):
+        '''
+        :return str: THe pattern to list the jobs
+        '''
+        match = self.REGEX_JOB_NAME.match(self.name)
+        if match:
+            return match.group(1) + '*'
+        
+
+#===================================================================================================
 # server_upload_jobs
 #===================================================================================================
-@cit(alias='sv.up', usage='<directory>')
-def server_upload_jobs(args, global_config):
+reindex_opt = opt('--reindex', default=False, action='store_true', help='reindexes jobs')
+@cit(alias='sv.up', usage='<directory>', opts=[reindex_opt])
+def server_upload_jobs(args, global_config, opts):
     '''
     Uploads jobs found in a directory directly to jenkins.
     
@@ -410,42 +442,87 @@ def server_upload_jobs(args, global_config):
     if not os.path.exists(directory):
         print >> sys.stderr, 'error: Directory "%s" does not exist' % directory
         return 2
-    
+
+
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
 
-    jobs_to_update = {}
+    search_pattern = None
+    local_jobs = []
     for dir_name in glob.glob(directory + '/*'):
         # Ignore all files
         if not os.path.isdir(dir_name):
             continue
 
-        job_name = os.path.basename(dir_name)
-        xml_filename = os.path.join(dir_name, 'config.xml')
-        has_config = os.path.exists(xml_filename)
-        if not has_config:
-            print 'Missing %r' % dir_name
+        job_info = JobInfo(dir_name)
+        if job_info.config_filename is None:
+            print 'Missing config.xml file from %r' % dir_name
             continue
-
-        if jenkins.has_job(job_name):
-            print 'Updating: %r' % job_name
-            jobs_to_update[job_name] = False, xml_filename
-        else:
-            print 'Creating: %r' % job_name
-            jobs_to_update[job_name] = True, xml_filename
-
-    if len(jobs_to_update) > 0:
-        ans = raw_input('Update/Create jobs (y|n): ')
-        if ans.startswith('y'):
-            for job_name, (create_job, xml_filename) in jobs_to_update.iteritems():
-                config_xml = file(xml_filename).read()
-                if create_job:
-                    job = jenkins.create_job(job_name, config_xml)
-                else:
-                    job = jenkins.get_job(job_name)
-                    job.update_config(config_xml)
+        
+        if opts.reindex:
+            if search_pattern is None:
+                search_pattern = job_info.SearchPattern()
+            elif search_pattern != job_info.SearchPattern():
+                raise ValueError('Bad job names pattern: %r != %r' % (search_pattern, job_info.SearchPattern()))
+        
+        job_info.update = jenkins.has_job(job_info.name)
+        local_jobs.append(job_info)
+        
+    rename_jobs = {}
+    delete_jobs = []
+    if opts.reindex:
+        remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
+        remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
+        
+        for job_info in local_jobs:
+            base_name = job_info.BaseName()
+            remote_job = remote_basenames.pop(base_name, None)
+            if remote_job is not None and remote_job.name != job_info.name:
+                rename_jobs[job_info.name] = remote_job.name
+        
+        delete_jobs = [ji.name for ji in remote_basenames.itervalues()]
+        
+    for job_info in local_jobs:
+        if job_info.name in rename_jobs:
+            print 'Renaming %r -> %r' % (rename_jobs[job_info.name], job_info.name)
             
-            print 'Done. %d jobs created.' % len(jobs_to_update)
+        elif job_info.update:
+            print 'Updating %r' % job_info.name
+        else:
+            print 'Creating %r' % job_info.name
+            
+    for job_name in delete_jobs:
+        print
+        print 'Deleting %r' % job_name
+        print
+            
+    if len(local_jobs) > 0:
+        ans = raw_input('Update jobs (y|*n): ')
+        if ans.startswith('y'):
+            for job_info in local_jobs:
+                config_xml = file(job_info.config_filename).read()
+                
+                if job_info.name in rename_jobs:
+                    remote_name = rename_jobs[job_info.name]
+                    print '\tUpdating job'
+                    job = jenkins.get_job(remote_job.name)
+                    job.update_config(config_xml)
+                    
+                    print 'Renaming %r -> %r' % (remote_name, job_info.name)
+                    jenkins.rename_job(remote_name, job_info.name)
+                    
+                else:
+                    if job_info.update:
+                        print 'Updating %r' % job_info.name
+                        job = jenkins.get_job(job_info.name)
+                        job.update_config(config_xml)
+                    else:
+                        print 'Creating %r' % job_info.name
+                        job = jenkins.create_job(job_info.name, config_xml)
+
+            for job_name in delete_jobs:
+                print 'Deleting %r' % job_name
+                job = jenkins.delete_job(job_name)
 
 
 #===================================================================================================
@@ -472,7 +549,7 @@ def server_download_jobs(args, opts, global_config):
     jenkins, jobs_to_download = server_list_jobs([pattern], global_config, opts)
     
     print 'Found: %d jobs' % len(jobs_to_download)
-    ans = raw_input("Download jobs?(y|n): ")
+    ans = raw_input("Download jobs?(y|*n): ")
     
     if not ans.lower().startswith('y'):
         return
@@ -490,8 +567,104 @@ def server_download_jobs(args, opts, global_config):
         file(xml_filename, 'w').write(job_xml)
 
 
+def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
+    '''
+    :param jenkins:
+    '''
+    import fnmatch
+    
+    if jenkins is None:
+        jenkins_url = global_config['jenkins']['url']
+        jenkins = Jenkins(jenkins_url)
+
+    regex = re.compile(pattern)
+    def Match(job_name):
+        if use_re:
+            return regex.match(job_name)
+        else:
+            return fnmatch.fnmatch(jobname, pattern)
+
+    jobs = []
+    for jobname in jenkins.iterkeys():
+        if Match(jobname):
+            jobs.append(JobInfo(jobname))
+            
+    return jobs
+    
+
 #===================================================================================================
 # server_rm_jobs
+#===================================================================================================
+def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_status=True):
+    import fnmatch
+
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+
+    regex = re.compile(pattern)
+    def Match(job_name):
+        if use_re:
+            return regex.match(job_name)
+        else:
+            return fnmatch.fnmatch(jobname, pattern)
+
+    jobs = []
+    for jobname in jenkins.iterkeys():
+        if Match(jobname):
+            job = jenkins.get_job(jobname)
+            if print_status:
+                print get_job_status(jobname, job, len(jobs))
+            else:
+                print '\t', jobname
+            jobs.append((jobname, job))
+
+    def DeleteJobs(jobs):
+        while True:
+            job_index = raw_input('Delete job? id = ')
+            try:
+                job_index = int(job_index)
+            except:
+                break
+            else:
+                try:
+                    job_name, job = jobs[job_index]
+                except:
+                    pass
+                else:
+                    ans = raw_input('Delete job (y(es)|*n(o)? %r: ' % job_name).lower()
+                    if ans.startswith('y'):
+                        jenkins.delete_job(job_name)
+        
+    if invoke:
+        ans = raw_input('Select an operation? (*e(xit) | d(elete)| i(nvoke): ').lower()
+        if not ans or ans.startswith('e'):
+            return
+        
+        elif ans.startswith('d'):
+            DeleteJobs(jobs)
+        
+        elif ans.startswith('i'):
+            job_index = raw_input('Invoke job? id = ')
+            if job_index:
+                try:
+                    job_index = int(job_index)
+                except:
+                    pass
+                else:
+    
+                    try:
+                        job_name, job = jobs[job_index]
+                    except:
+                        pass
+                    else:
+                        print 'Invoking job: %r' % jobs[job_index][0]
+                        job.invoke()
+
+    return jenkins, jobs
+
+
+#===================================================================================================
+# cit_delete_jobs
 #===================================================================================================
 @cit(alias='sv.rm', usage='<pattern> [directory] [options]', opts=[re_option])
 def server_rm_jobs(args, opts, global_config):
@@ -499,7 +672,7 @@ def server_rm_jobs(args, opts, global_config):
 
     if len(jobs_to_delete) > 0:
         print 'Found: %d jobs' % len(jobs_to_delete)
-        ans = raw_input("Delete jobs?(y|n): ")
+        ans = raw_input("Delete jobs?(y|*n): ")
         if ans.startswith('y'):
             for jobname, job in jobs_to_delete:
                 print 'Deleting: %r' % jobname
@@ -513,7 +686,6 @@ def server_rm_jobs(args, opts, global_config):
 # Git-related helper functions to extract user name, current branch, etc.
 #
 #===================================================================================================
-
 
 #===================================================================================================
 # get_git_user

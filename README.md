@@ -103,8 +103,108 @@ This command will force jobs related to the given branch to start running.
 Usage:
 
 ```
-cit start my_feature_branch
+cit start [my_feature_branch]
 ```
+
+### upd
+
+Uploads to Jenkins all jobs found in given directory. The given directory must contain a sub-directory for every job to be created or updated. 
+Every job is configured by a XML configuration file named `config.xml` inside job's sub-directory.
+
+If there is a job of same name in Jenkins it updates, otherwise it creates a new job.
+If Jenkins already have a job with the same name but with a different $(job_index), the job will be renamed. To disable the search and rename just add the option --no-reindex to the command line.
+
+
+Note:
+
+The reindex feature compare all job names matching the given pattern: $(prefix)__$(job_index)-$(name).
+
+The prefix will be used to list the existing jobs from Jenkins.
+
+e.g. my_project__01-base
+
+Usage:
+
+```
+cit upd -d [dir_name]
+```
+
+Example:
+
+```
+$ cit upd -d foo_jobs\
+Updating: 'foo-redhat64'
+Updating: 'foo-win32'
+Updating: 'foo-win64'
+Update/Create jobs (yes|no):
+```
+
+### dtd
+
+Download configuration files for all Jenkins jobs whose name matches given pattern. The pattern may be a regular expression if option `--re` is used 
+otherwise it defaults to Unix filename pattern matching. Directory name may be omitted then downloaded job files will be put in a directory named 'hudson'.
+
+Usage:
+
+```
+cit dtd [search_pattern] -d [dir_name]
+```
+
+Example:
+
+```
+$ cit dtd foo*
+        foo-redhat64
+        foo-win32
+        foo-win64
+Found: 3 jobs
+Download jobs?(y|n):
+```
+
+### ls
+
+List names and current status of all jobs in Jenkins matching given pattern. The pattern may be a regular expression if option `--re` is used otherwise 
+it defaults to Unix filename pattern matching. Also for every listed file a index is shown. After jobs are listed a question about next operation is asked 
+to user and this index may be used to queue a job on Jenkins or even delete a job.
+
+Usage:
+
+```
+cit ls [search_pattern]
+```
+
+Example:
+
+```
+$ cit ls foo*
+ 0    FAILURE ( Wed Aug 07 14:36:22 2013) - foo-redhat64
+ 1    SUCCESS ( Wed Aug 07 14:36:22 2013) - foo-win32
+ 2    SUCCESS ( Wed Aug 07 14:36:22 2013) - foo-win64
+Select an operation? (e(xit) | d(elete)| i(nvoke):
+```
+
+### del
+
+Deletes any job matching the given pattern. The pattern may be a regular expression if option `--re` is used otherwise it defaults to Unix filename pattern 
+matching. Confirmation is prompted to user before jobs are actually deleted.
+
+Usage:
+
+```
+cit del [search_pattern]
+```
+
+Example:
+
+```
+$ cit del foo*
+        foo-redhat64
+        foo-win32
+        foo-win64
+Found: 3 jobs
+Delete jobs?(y|n):
+```
+
 
 ## Developing
 

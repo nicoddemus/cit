@@ -153,7 +153,7 @@ def feature_branch_add(branch, user_email, job_config, global_config):
 # feature_branch_rm
 #===================================================================================================
 @cit(alias='fb.rm', usage='[branch]')
-def feature_branch_rm(branch, global_config):
+def feature_branch_rm(args, branch, global_config):
     '''
     Remove jobs associated with the current git branch.
     
@@ -162,8 +162,8 @@ def feature_branch_rm(branch, global_config):
     '''
     cit_file_name, job_config = load_cit_local_config(os.getcwd())
 
-    if branch is None:
-        branch = get_git_branch(cit_file_name)
+    if args:
+        branch = args[0]
 
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)

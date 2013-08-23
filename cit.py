@@ -136,13 +136,16 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
 # feature_branch_add
 #===================================================================================================
 @cit(alias='fb.add', usage='[branch]')
-def feature_branch_add(branch, user_email, job_config, global_config):
+def feature_branch_add(args, branch, user_email, job_config, global_config):
     '''
     Create/Update jobs associated with the current git branch.
     
     This will create one or more jobs on jenkins for the current feature branch,
     or for the one given as parameter if one is provided.
     '''
+    if args:
+        branch = args[0]
+
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
     for job_name, new_job_name in get_configured_jobs(branch, job_config):

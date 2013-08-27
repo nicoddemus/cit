@@ -108,7 +108,7 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     # If displayName exists adds the feature branch name to it.
     display_name_elem = tree.find('./displayName')
     if display_name_elem is not None:
-        display_name_elem.text = '(%(branch_name)s) %(display_name)s' % {'display_name':display_name_elem.text, 'branch_name':branch}
+        display_name_elem.text = '%(branch_name)s %(display_name)s' % {'display_name':display_name_elem.text, 'branch_name':branch}
 
     recipient_elements = list(tree.findall('.//hudson.tasks.Mailer/recipients'))
     if len(recipient_elements) == 1:

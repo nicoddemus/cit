@@ -827,7 +827,7 @@ def check_output(*args, **kwargs):
         popen = subprocess.Popen(*args, **kwargs)
         stdout, stderr = popen.communicate()
         if popen.returncode != 0:
-            raise subprocess.CalledProcessError
+            raise subprocess.CalledProcessError(popen.returncode, args[0])
         return stdout
 
 #===================================================================================================

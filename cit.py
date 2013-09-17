@@ -37,25 +37,48 @@ from optparse import make_option as opt
 
 #===================================================================================================
 # clik initialization
+#
+# This block is used to initialize clik framework
+#
+#===================================================================================================
+
+#===================================================================================================
+# get_global_config_file
+#===================================================================================================
+def get_global_config_file():
+    '''
+    Returns the path to the global config file. 
+    '''
+    # default values
+    global_config_file = os.environ.get('CIT_CONFIG')
+    if global_config_file is None:
+        global_config_file = os.path.join(os.path.dirname(__file__), 'citconfig.yaml')
+    return global_config_file
+
+
+#===================================================================================================
+# get_command_args
 #===================================================================================================
 def get_command_args(opts):
+    '''
+    Returns a dict containing all extra options that commands in this module can receive as
+    arguments. 
+    
+    See clik framework for more details on this.
+    '''
     cit_file_name, job_config = load_cit_local_config(os.getcwd())
     
     # user, email, branch
     user_name, user_email = get_git_user()
     branch = get_git_branch()
     
-    # default values
-    global_config_file = os.environ.get('CIT_CONFIG')
-    if global_config_file is None:
-        global_config_file = os.path.join(os.path.dirname(__file__), 'citconfig.yaml')
+    global_config_file = get_global_config_file()
         
     # read global config
-    if not os.path.isfile(global_config_file):
-        print >> sys.stderr, 'could not find cit config file at: %s' % global_config_file
-        return 2
-
-    global_config = yaml.load(file(global_config_file).read())
+    if os.path.isfile(global_config_file):
+        global_config = yaml.load(file(global_config_file).read())
+    else:
+        global_config = {}
     
     return {
         'job_config' : job_config,
@@ -66,7 +89,8 @@ def get_command_args(opts):
     }
 
 
-cit = clik.App(
+
+app = clik.App(
     name='cit',
     description='Command line tool for interacting with a Jenkins integration server.\n', 
     args_callback=get_command_args, 
@@ -135,7 +159,7 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
 #===================================================================================================
 # feature_branch_add
 #===================================================================================================
-@cit(alias='fb.add', usage='[branch]')
+@app(alias='fb.add', usage='[branch]')
 def feature_branch_add(args, branch, user_email, job_config, global_config):
     '''
     Create/Update jobs associated with the current git branch.
@@ -155,16 +179,14 @@ def feature_branch_add(args, branch, user_email, job_config, global_config):
 #===================================================================================================
 # feature_branch_rm
 #===================================================================================================
-@cit(alias='fb.rm', usage='[branch]')
-def feature_branch_rm(args, branch, global_config):
+@app(alias='fb.rm', usage='[branch]')
+def feature_branch_rm(args, branch, global_config, job_config):
     '''
     Remove jobs associated with the current git branch.
     
     This will remove one or more jobs from jenkins created previously with "feature_branch_add".
     If no branch is given the current one will be used.
     '''
-    cit_file_name, job_config = load_cit_local_config(os.getcwd())
-
     if args:
         branch = args[0]
 
@@ -181,15 +203,13 @@ def feature_branch_rm(args, branch, global_config):
 #===================================================================================================
 # feature_branch_start
 #===================================================================================================
-@cit(alias='fb.start', usage='[branch]')
-def feature_branch_start(branch, global_config):
+@app(alias='fb.start', usage='[branch]')
+def feature_branch_start(args, branch, job_config, global_config):
     '''
     Start jobs associated with the current git branch.
     '''
-    cit_file_name, job_config = load_cit_local_config(os.getcwd())
-
-    if branch is None:
-        branch = get_git_branch(cit_file_name)
+    if args:
+        branch = args[0]
 
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
@@ -210,7 +230,7 @@ def feature_branch_start(branch, global_config):
 #===================================================================================================
 # feature_branch_init
 #===================================================================================================
-@cit(alias='fb.init', usage='[branch]')
+@app(alias='fb.init', usage='[branch]')
 def feature_branch_init():
     '''
     *Initial* feature-branch configuration for the current git repository.
@@ -254,8 +274,7 @@ def feature_branch_init():
     else:
         print 'Abort? Okaay.'
         
-            
-
+        
 #===================================================================================================
 # Server Commands
 # -----------------------
@@ -272,7 +291,7 @@ list_jobs_opts = [
     re_option,
     opt('-i', '--interactive', help='interactively remove or start them', default=False, action='store_true'),
 ]
-@cit(alias='sv.ls', usage='<pattern> [options]', opts=list_jobs_opts)
+@app(alias='sv.ls', usage='<pattern> [options]', opts=list_jobs_opts)
 def server_list_jobs(args, global_config, opts):
     '''
     Lists the jobs whose name match a given pattern.
@@ -349,7 +368,7 @@ def server_list_jobs(args, global_config, opts):
                     except:
                         pass
                     else:
-                        print 'Invoking job: %r' % jobs[job_index][0]
+                        print 'Invoking job: %r' % job_name
                         job.invoke()
 
     return jenkins, jobs
@@ -420,7 +439,7 @@ class JobInfo(object):
 # server_upload_jobs
 #===================================================================================================
 reindex_opt = opt('--reindex', default=False, action='store_true', help='reindexes jobs')
-@cit(alias='sv.up', usage='<directory>', opts=[reindex_opt])
+@app(alias='sv.up', usage='<directory>', opts=[reindex_opt])
 def server_upload_jobs(args, global_config, opts):
     '''
     Uploads jobs found in a directory directly to jenkins.
@@ -474,7 +493,7 @@ def server_upload_jobs(args, global_config, opts):
     rename_jobs = {}
     delete_jobs = []
     if opts.reindex:
-        remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
+        remote_jobs = get_remote_job_infos(search_pattern, global_config, jenkins=jenkins)
         remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
         
         for job_info in local_jobs:
@@ -531,7 +550,7 @@ def server_upload_jobs(args, global_config, opts):
 #===================================================================================================
 # server_download_jobs
 #===================================================================================================
-@cit(alias='sv.down', usage='<pattern> [directory] [options]', opts=[re_option])
+@app(alias='sv.down', usage='<pattern> [directory] [options]', opts=[re_option])
 def server_download_jobs(args, opts, global_config):
     '''
     Downloads jobs from jenkins whose name match the given pattern (fnmatch or regex style).
@@ -570,7 +589,10 @@ def server_download_jobs(args, opts, global_config):
         file(xml_filename, 'w').write(job_xml)
 
 
-def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
+#===================================================================================================
+# get_remote_job_infos
+#===================================================================================================
+def get_remote_job_infos(pattern, global_config, use_re=False, jenkins=None):
     '''
     :param jenkins:
     '''
@@ -667,9 +689,9 @@ def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_stat
 
 
 #===================================================================================================
-# cit_delete_jobs
+# server_rm_jobs
 #===================================================================================================
-@cit(alias='sv.rm', usage='<pattern> [directory] [options]', opts=[re_option])
+@app(alias='sv.rm', usage='<pattern> [directory] [options]', opts=[re_option])
 def server_rm_jobs(args, opts, global_config):
     jenkins, jobs_to_delete = server_list_jobs(args, global_config, opts)
 
@@ -716,12 +738,18 @@ def get_git_branch():
 #===================================================================================================
 # cit_install
 #===================================================================================================
-def cit_install(global_config_file, stdin):
+@app(alias='install')
+def cit_install():
+    '''
+    Configures cit for the first time.
+    
+    This command should be used to configure cit for the first time. 
+    '''
     print '=' * 60
     print 'Configuration'
     print '=' * 60
     sys.stdout.write('- Enter Jenkins URL:   ')
-    jenkins_url = stdin.readline().strip()
+    jenkins_url = sys.stdin.readline().strip()
     if not jenkins_url.startswith('http'):
         jenkins_url = 'http://' + jenkins_url
 
@@ -740,7 +768,7 @@ def cit_install(global_config_file, stdin):
         }
     }
 
-    f = file(global_config_file, 'w')
+    f = file(get_global_config_file(), 'w')
     f.write(yaml.dump(config, default_flow_style=False))
     f.close()
 
@@ -801,19 +829,6 @@ def find_git_directory(from_dir):
 #===================================================================================================
 
 #===================================================================================================
-# chdir
-#===================================================================================================
-@contextlib.contextmanager
-def chdir(cwd):
-    old_cwd = os.getcwd()
-    if os.path.isfile(cwd):
-        cwd = os.path.dirname(cwd)
-    os.chdir(cwd)
-    yield
-    os.chdir(old_cwd)
-
-
-#===================================================================================================
 # check_output
 #===================================================================================================
 def check_output(*args, **kwargs):
@@ -834,4 +849,4 @@ def check_output(*args, **kwargs):
 # main
 #===================================================================================================
 if __name__ == '__main__':
-    cit.main()
+    sys.exit(app.main())

@@ -8,4 +8,5 @@ before_install:
   - sudo apt-get install jenkins
   - sudo /etc/init.d/jenkins start
   - sleep 5
-script: py.test -v --jenkins-available 
+script: 
+  - py.test -v --jenkins-available 

@@ -4,7 +4,6 @@ python:
   - "2.6"
   - "2.7"
 before_install:   
-  - sudo apt-get update
   - sudo apt-get install jenkins
   - sudo /etc/init.d/jenkins start
   - sleep 5

@@ -2,7 +2,8 @@
 
 Command line tool for interacting with a continuous integration server. 
 
-[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit) 
+[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit)
+
 
 ## Requirements
 
@@ -45,7 +46,7 @@ Command line tool for interacting with a continuous integration server.
 
 Following there is a quick overview about main commands.
 
-### init
+### fb.init
 
 This command is responsible for configuring Jenkins jobs. The command will ask you the name of the source job, which will be taken as a template for feature jobs. After that you have to inform the job name pattern.
 
@@ -84,7 +85,7 @@ cit add [my_feature_branch]
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (CREATED)
 ```
 
-### rm
+### fb.rm
 
 This command is responsible for removing the branches from cit's watch. That means that jobs related to the removed branch will be also removed from Jenkins.
 If you don't give a branch name the current branch will be taken.
@@ -96,7 +97,7 @@ cit rm [my_feature_branch]
 project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (REMOVED)
 ```
 
-### start
+### fb.start
 
 This command will force jobs related to the given branch to start running.
 
@@ -106,10 +107,10 @@ Usage:
 cit start [my_feature_branch]
 ```
 
-### upd
+### sv.up
 
 Uploads to Jenkins all jobs found in given directory. The given directory must contain a sub-directory for every job to be created or updated. 
-Every job is configured by a XML configuration file named `config.xml` inside job's sub-directory.
+Every job is configured by a XML configuration file named `config.xml` inside each job sub-directory.
 
 If there is a job of same name in Jenkins it updates, otherwise it creates a new job.
 If Jenkins already have a job with the same name but with a different $(job_index), the job will be renamed. To disable the search and rename just add the option --no-reindex to the command line.
@@ -126,34 +127,35 @@ e.g. my_project__01-base
 Usage:
 
 ```
-cit upd -d [dir_name]
+cit sv.up [--reindex] <dir_name>
 ```
 
 Example:
 
 ```
-$ cit upd -d foo_jobs\
+$ cit sv.up ./foo_jobs
 Updating: 'foo-redhat64'
 Updating: 'foo-win32'
 Updating: 'foo-win64'
-Update/Create jobs (yes|no):
+Update/Create jobs (y|n):
 ```
 
-### dtd
+### sv.down
 
 Download configuration files for all Jenkins jobs whose name matches given pattern. The pattern may be a regular expression if option `--re` is used 
-otherwise it defaults to Unix filename pattern matching. Directory name may be omitted then downloaded job files will be put in a directory named 'hudson'.
+otherwise it defaults to Unix filename pattern matching. 
+Directory name may be omitted then downloaded job files will be put in the current directory.
 
 Usage:
 
 ```
-cit dtd [search_pattern] -d [dir_name]
+cit sv.down <search_pattern> [dir_name]
 ```
 
 Example:
 
 ```
-$ cit dtd foo*
+$ cit sv.down foo*
         foo-redhat64
         foo-win32
         foo-win64
@@ -161,7 +163,7 @@ Found: 3 jobs
 Download jobs?(y|n):
 ```
 
-### ls
+### sv.ls
 
 List names and current status of all jobs in Jenkins matching given pattern. The pattern may be a regular expression if option `--re` is used otherwise 
 it defaults to Unix filename pattern matching. Also for every listed file a index is shown. After jobs are listed a question about next operation is asked 
@@ -183,7 +185,7 @@ $ cit ls foo*
 Select an operation? (e(xit) | d(elete)| i(nvoke):
 ```
 
-### del
+### sv.rm
 
 Deletes any job matching the given pattern. The pattern may be a regular expression if option `--re` is used otherwise it defaults to Unix filename pattern 
 matching. Confirmation is prompted to user before jobs are actually deleted.
@@ -191,7 +193,7 @@ matching. Confirmation is prompted to user before jobs are actually deleted.
 Usage:
 
 ```
-cit del [search_pattern]
+cit sv.rm [search_pattern]
 ```
 
 Example:

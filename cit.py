@@ -312,7 +312,7 @@ def server_list_jobs(args, global_config, opts):
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
     
-    def Match(job_name):
+    def match(job_name):
         if opts.re:
             return re.match(pattern, job_name)
         else:
@@ -320,7 +320,7 @@ def server_list_jobs(args, global_config, opts):
 
     jobs = []
     for jobname in jenkins.iterkeys():
-        if Match(jobname):
+        if match(jobname):
             job = jenkins.get_job(jobname)
             if opts.interactive:
                 print get_job_status(jobname, job, len(jobs))
@@ -328,7 +328,7 @@ def server_list_jobs(args, global_config, opts):
                 print '\t', jobname
             jobs.append((jobname, job))
 
-    def DeleteJobs(jobs):
+    def delete_jobs(jobs):
         while True:
             job_index = raw_input('Delete job? id = ')
             try:
@@ -352,7 +352,7 @@ def server_list_jobs(args, global_config, opts):
             return
         
         elif ans == 'rm':
-            DeleteJobs(jobs)
+            delete_jobs(jobs)
         
         elif ans == 'start':
             job_index = raw_input('Invoke job? id = ')
@@ -603,7 +603,8 @@ def get_remote_job_infos(pattern, global_config, use_re=False, jenkins=None):
         jenkins = Jenkins(jenkins_url)
 
     regex = re.compile(pattern)
-    def Match(job_name):
+    
+    def match(job_name):
         if use_re:
             return regex.match(job_name)
         else:
@@ -611,82 +612,11 @@ def get_remote_job_infos(pattern, global_config, use_re=False, jenkins=None):
 
     jobs = []
     for jobname in jenkins.iterkeys():
-        if Match(jobname):
+        if match(jobname):
             jobs.append(JobInfo(jobname))
             
     return jobs
     
-
-#===================================================================================================
-# server_rm_jobs
-#===================================================================================================
-def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_status=True):
-    import fnmatch
-
-    jenkins_url = global_config['jenkins']['url']
-    jenkins = Jenkins(jenkins_url)
-
-    regex = re.compile(pattern)
-    def Match(job_name):
-        if use_re:
-            return regex.match(job_name)
-        else:
-            return fnmatch.fnmatch(jobname, pattern)
-
-    jobs = []
-    for jobname in jenkins.iterkeys():
-        if Match(jobname):
-            job = jenkins.get_job(jobname)
-            if print_status:
-                print get_job_status(jobname, job, len(jobs))
-            else:
-                print '\t', jobname
-            jobs.append((jobname, job))
-
-    def DeleteJobs(jobs):
-        while True:
-            job_index = raw_input('Delete job? id = ')
-            try:
-                job_index = int(job_index)
-            except:
-                break
-            else:
-                try:
-                    job_name, job = jobs[job_index]
-                except:
-                    pass
-                else:
-                    ans = raw_input('Delete job (y(es)|*n(o)? %r: ' % job_name).lower()
-                    if ans.startswith('y'):
-                        jenkins.delete_job(job_name)
-        
-    if invoke:
-        ans = raw_input('Select an operation? (*e(xit) | d(elete)| i(nvoke): ').lower()
-        if not ans or ans.startswith('e'):
-            return
-        
-        elif ans.startswith('d'):
-            DeleteJobs(jobs)
-        
-        elif ans.startswith('i'):
-            job_index = raw_input('Invoke job? id = ')
-            if job_index:
-                try:
-                    job_index = int(job_index)
-                except:
-                    pass
-                else:
-    
-                    try:
-                        job_name, job = jobs[job_index]
-                    except:
-                        pass
-                    else:
-                        print 'Invoking job: %r' % jobs[job_index][0]
-                        job.invoke()
-
-    return jenkins, jobs
-
 
 #===================================================================================================
 # server_rm_jobs

@@ -1,7 +1,7 @@
 from __future__ import with_statement
+import cit # must be imported first to install submodules on PYTHONPATH
 from jenkinsapi.jenkins import Jenkins
 import StringIO
-import cit # must be imported first to install submodules on PYTHONPATH
 import hashlib
 import mock
 import os

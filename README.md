@@ -1,6 +1,6 @@
 # cit
 
-Command line tool for interacting with a continuous integration server. 
+Command line tool for interacting with a Jenkins server. 
 
 The main workflow for this tool is to help work with feature branches, so that you can
 easily setup jenkins jobs to run your tests in that feature branch:

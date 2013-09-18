@@ -1,14 +1,15 @@
 from __future__ import with_statement
 import cit # must be imported first to install submodules on PYTHONPATH
 from jenkinsapi.jenkins import Jenkins
+import StringIO
 import hashlib
+import mock
 import os
 import pytest
 import time
 import xml.etree.ElementTree as ET
-import StringIO
 import yaml
-import mock
+import sys
 
 
 JENKINS_URL = 'http://localhost:8080'
@@ -103,7 +104,13 @@ def test_add(tmp_job_name, tmpdir, global_config_file, branch):
         
         with mock.patch('cit.get_git_user', autospec=True) as mock_get_git_user:
             mock_get_git_user.return_value = ('anonymous', 'anonymous@somewhere.com')
-            assert cit.main(['cit', 'add', branch], global_config_file=global_config_file) == cit.RETURN_CODE_OK
+            
+            with mock.patch('cit.get_global_config_file', autospec=True) as mock_get_global_config_file:
+                mock_get_global_config_file.return_value = str(global_config_file)
+                argv = ['fb.add']
+                if branch:
+                    argv.append(branch)
+                assert cit.app.main(argv) is None
     
     branch = 'new-feature'
     
@@ -125,7 +132,7 @@ def test_add(tmp_job_name, tmpdir, global_config_file, branch):
     display_name_elements = list(config.findall('.//displayName'))
     assert len(display_name_elements) == 1
     display_name_element = display_name_elements[0]
-    assert display_name_element.text == '(%s) SS win32' % branch
+    assert display_name_element.text == '%s SS win32' % branch
     
     # ensure we have set the user email recipient
     recipient_elements = list(config.findall('.//hudson.tasks.Mailer/recipients'))
@@ -146,7 +153,7 @@ def test_add(tmp_job_name, tmpdir, global_config_file, branch):
 # test_cit_init
 #===================================================================================================
 @pytest.mark.usefixtures('change_cwd')
-def test_cit_init(tmpdir, global_config_file):    
+def test_cit_init(tmpdir):    
     input_lines = [
         'project_win32', 
         'project_$name_win32',
@@ -155,7 +162,11 @@ def test_cit_init(tmpdir, global_config_file):
         '',
     ]
     stdin = StringIO.StringIO('\n'.join(input_lines))
-    assert cit.main(['cit', 'init'], stdin=stdin, global_config_file=global_config_file) == cit.RETURN_CODE_OK
+    try:
+        sys.stdin = stdin
+        assert cit.app.main(['fb.init']) is None
+    finally:
+        sys.stdin = sys.__stdin__
     
     cit_file = tmpdir.join('.cit.yaml')
     assert cit_file.ensure()
@@ -184,19 +195,24 @@ def test_cit_init(tmpdir, global_config_file):
 def test_cit_install(tmpdir):    
     global_config_file = tmpdir.join('citconfig.yaml')
     
-    input_lines = [
-        'localhost:8080',
-        '',
-    ]
-    stdin = StringIO.StringIO('\n'.join(input_lines))
+    with mock.patch('cit.get_global_config_file', autospec=True) as mock_get_global_config_file:
+        mock_get_global_config_file.return_value = str(global_config_file)
     
-    assert cit.main(['cit'], global_config_file=str(global_config_file)) == cit.RETURN_CODE_CONFIG_NOT_FOUND
-    assert cit.main(['cit', '--install'], stdin=stdin, global_config_file=str(global_config_file)) == cit.RETURN_CODE_OK
-    
-    assert global_config_file.ensure()
-    contents = global_config_file.read()
-    obtained = yaml.load(contents)
-    assert obtained == {'jenkins' : {'url' : 'http://localhost:8080'}}     
+        input_lines = [
+            'localhost:8080',
+            '',
+        ]
+        stdin = StringIO.StringIO('\n'.join(input_lines))
+        sys.stdin = stdin        
+        try:
+            assert cit.app.main(['install']) is None
+        finally:
+            sys.stdin = sys.__stdin__ 
+        
+        assert global_config_file.ensure()
+        contents = global_config_file.read()
+        obtained = yaml.load(contents)
+        assert obtained == {'jenkins' : {'url' : 'http://localhost:8080'}}     
     
     
 #===================================================================================================

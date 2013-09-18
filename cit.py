@@ -1,9 +1,4 @@
 from __future__ import with_statement
-import glob
-import re
-import time
-
-
 
 #===================================================================================================
 # configure_submodules_path
@@ -18,6 +13,7 @@ def configure_submodules_path():
     directory = os.path.abspath(os.path.dirname(__file__))
     sys.path.insert(0, os.path.join(directory, 'jenkinsapi'))
     sys.path.insert(0, os.path.join(directory, 'pyyaml', 'lib'))
+    sys.path.insert(0, os.path.join(directory, 'clik'))
 
 configure_submodules_path()
 
@@ -33,13 +29,81 @@ import yaml
 import os
 import sys
 import urllib2
+import glob
+import re
+import time
+import clik
+from optparse import make_option as opt
 
 #===================================================================================================
-# cit commands
-# ------------
+# clik initialization
 #
-# Functions below handle the actual "meat" of cit's commands.
+# This block is used to initialize clik framework
 #
+#===================================================================================================
+
+#===================================================================================================
+# get_global_config_file
+#===================================================================================================
+def get_global_config_file():
+    '''
+    Returns the path to the global config file. 
+    '''
+    # default values
+    global_config_file = os.environ.get('CIT_CONFIG')
+    if global_config_file is None:
+        global_config_file = os.path.join(os.path.dirname(__file__), 'citconfig.yaml')
+    return global_config_file
+
+
+#===================================================================================================
+# get_command_args
+#===================================================================================================
+def get_command_args(opts):
+    '''
+    Returns a dict containing all extra options that commands in this module can receive as
+    arguments. 
+    
+    See clik framework for more details on this.
+    '''
+    cit_file_name, job_config = load_cit_local_config(os.getcwd())
+    
+    # user, email, branch
+    user_name, user_email = get_git_user()
+    branch = get_git_branch()
+    
+    global_config_file = get_global_config_file()
+        
+    # read global config
+    if os.path.isfile(global_config_file):
+        global_config = yaml.load(file(global_config_file).read())
+    else:
+        global_config = {}
+    
+    return {
+        'job_config' : job_config,
+        'global_config' : global_config,
+        'user_name' : user_name,
+        'user_email' : user_email,
+        'branch' : branch,
+    }
+
+
+
+app = clik.App(
+    name='cit',
+    description='Command line tool for interacting with a Jenkins integration server.\n', 
+    args_callback=get_command_args, 
+    shell_command=False,
+    console_opts=False,
+)
+
+#===================================================================================================
+# Feature Branch Commands
+# -----------------------
+# 
+# The next commands deal with feature branch jobs for the git repository in the current directory.  
+# 
 #===================================================================================================
 
 #===================================================================================================
@@ -68,7 +132,7 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     # If displayName exists adds the feature branch name to it.
     display_name_elem = tree.find('./displayName')
     if display_name_elem is not None:
-        display_name_elem.text = '(%(branch_name)s) %(display_name)s' % {'display_name':display_name_elem.text, 'branch_name':branch}
+        display_name_elem.text = '%(branch_name)s %(display_name)s' % {'display_name':display_name_elem.text, 'branch_name':branch}
 
     recipient_elements = list(tree.findall('.//hudson.tasks.Mailer/recipients'))
     if len(recipient_elements) == 1:
@@ -92,24 +156,228 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     return job
 
 
-
 #===================================================================================================
-# cit_add
+# feature_branch_add
 #===================================================================================================
-def cit_add(branch, global_config):
-    cit_file_name, job_config = load_cit_local_config(os.getcwd())
-
-    if branch is None:
-        branch = get_git_branch(cit_file_name)
+@app(alias='fb.add', usage='[branch]')
+def feature_branch_add(args, branch, user_email, job_config, global_config):
+    '''
+    Create/Update jobs associated with the current git branch.
+    
+    This will create one or more jobs on jenkins for the current feature branch,
+    or for the one given as parameter if one is provided.
+    '''
+    if args:
+        branch = args[0]
 
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
     for job_name, new_job_name in get_configured_jobs(branch, job_config):
-        user_name, user_email = get_git_user(cit_file_name)
         create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_email)
 
 
-def cit_get_job_status(job_name, job, job_index=None):
+#===================================================================================================
+# feature_branch_rm
+#===================================================================================================
+@app(alias='fb.rm', usage='[branch]')
+def feature_branch_rm(args, branch, global_config, job_config):
+    '''
+    Remove jobs associated with the current git branch.
+    
+    This will remove one or more jobs from jenkins created previously with "feature_branch_add".
+    If no branch is given the current one will be used.
+    '''
+    if args:
+        branch = args[0]
+
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+    for _, new_job_name in get_configured_jobs(branch, job_config):
+        if jenkins.has_job(new_job_name):
+            jenkins.delete_job(new_job_name)
+            print new_job_name, '(REMOVED)'
+        else:
+            print new_job_name, '(NOT FOUND)'
+            
+            
+#===================================================================================================
+# feature_branch_start
+#===================================================================================================
+@app(alias='fb.start', usage='[branch]')
+def feature_branch_start(args, branch, job_config, global_config):
+    '''
+    Start jobs associated with the current git branch.
+    '''
+    if args:
+        branch = args[0]
+
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+
+    for _, new_job_name in get_configured_jobs(branch, job_config):
+        if jenkins.has_job(new_job_name):
+            job = jenkins.get_job(new_job_name)
+            if not job.is_running():
+                job.invoke()
+                status = '(STARTED)'
+            else:
+                status = '(RUNNING)'
+        else:
+            status = '(NOT FOUND)'
+        print new_job_name, status
+        
+        
+#===================================================================================================
+# feature_branch_init
+#===================================================================================================
+@app(alias='fb.init', usage='[branch]')
+def feature_branch_init():
+    '''
+    *Initial* feature-branch configuration for the current git repository.
+    
+    This command will ask in sequence for the names of the jobs you would like to use
+    as basis for feature branch jobs at your Jenkins server. Usually you will want all
+    job variations that build the "master" branch. 
+    '''
+    cit_file_name, config = load_cit_local_config(os.getcwd())
+
+    print 'Configuring jobs for feature branches: %s' % cit_file_name
+    print
+
+    updated = 0
+    while True:
+        sys.stdout.write('Source job (empty to exit):      ')
+        source_job = sys.stdin.readline().strip()
+        if not source_job:
+            break
+
+        sys.stdout.write('Feature job (shh, use $name):    ')
+        fb_job = sys.stdin.readline().strip()
+        if not fb_job:
+            break
+
+        fb_data = {
+            'source-job' : source_job,
+            'feature-branch-job' : fb_job,
+        }
+        config.setdefault('jobs', []).append(fb_data)
+        updated += 1
+        print 'Done! Next?'
+        print
+
+    print
+    if updated:
+        f = file(cit_file_name, 'w')
+        f.write(yaml.dump(config, default_flow_style=False))
+        f.close()
+        print 'Done! Configured %d job(s)!' % updated
+    else:
+        print 'Abort? Okaay.'
+        
+        
+#===================================================================================================
+# Server Commands
+# -----------------------
+# 
+# The next commands deal directly with jobs on the server, and can be run from anywhere.  
+# 
+#===================================================================================================
+
+#===================================================================================================
+# server_list_jobs
+#===================================================================================================
+re_option = opt('--re', help='pattern is a regular expression', default=False, action='store_true')
+list_jobs_opts = [
+    re_option,
+    opt('-i', '--interactive', help='interactively remove or start them', default=False, action='store_true'),
+]
+@app(alias='sv.ls', usage='<pattern> [options]', opts=list_jobs_opts)
+def server_list_jobs(args, global_config, opts):
+    '''
+    Lists the jobs whose name match a given pattern.
+    '''
+    import fnmatch
+    
+    if len(args) < 1:
+        print >> sys.stderr, 'error: missing pattern'
+        return 2
+    
+    # TODO: other commands call this one; we should refactor this to make most of the functionality
+    # reusable
+    if not hasattr(opts, 'interactive'):
+        opts.interactive = False
+    
+    pattern = args[0]
+
+    jenkins_url = global_config['jenkins']['url']
+    jenkins = Jenkins(jenkins_url)
+    
+    def match(job_name):
+        if opts.re:
+            return re.match(pattern, job_name)
+        else:
+            return fnmatch.fnmatch(jobname, pattern)
+
+    jobs = []
+    for jobname in jenkins.iterkeys():
+        if match(jobname):
+            job = jenkins.get_job(jobname)
+            if opts.interactive:
+                print get_job_status(jobname, job, len(jobs))
+            else:
+                print '\t', jobname
+            jobs.append((jobname, job))
+
+    def delete_jobs(jobs):
+        while True:
+            job_index = raw_input('Delete job? id = ')
+            try:
+                job_index = int(job_index)
+            except:
+                break
+            else:
+                try:
+                    job_name, job = jobs[job_index]
+                except:
+                    pass
+                else:
+                    ans = raw_input('Delete job (y(es)|n(o)? %r: ' % job_name).lower()
+                    if ans.startswith('y'):
+                        jenkins.delete_job(job_name)
+        
+    # TODO: remove this option from here, it belongs in a separate command
+    if opts.interactive:
+        ans = raw_input('Select an operation? (rm | start | e(xit)): ').lower()
+        if not ans or ans.startswith('e'):
+            return
+        
+        elif ans == 'rm':
+            delete_jobs(jobs)
+        
+        elif ans == 'start':
+            job_index = raw_input('Invoke job? id = ')
+            if job_index:
+                try:
+                    job_index = int(job_index)
+                except:
+                    pass
+                else:
+    
+                    try:
+                        job_name, job = jobs[job_index]
+                    except:
+                        pass
+                    else:
+                        print 'Invoking job: %r' % job_name
+                        job.invoke()
+
+    return jenkins, jobs
+
+            
+#===================================================================================================
+# get_job_status
+#===================================================================================================
+def get_job_status(job_name, job, job_index=None):
     try:
         build = job.get_last_build()
     except:
@@ -168,16 +436,38 @@ class JobInfo(object):
         
 
 #===================================================================================================
-# cit_up_from_dir
+# server_upload_jobs
 #===================================================================================================
-def cit_up_from_dir(directory, global_config, reindex=True):
+reindex_opt = opt('--reindex', default=False, action='store_true', help='reindexes jobs')
+@app(alias='sv.up', usage='<directory>', opts=[reindex_opt])
+def server_upload_jobs(args, global_config, opts):
+    '''
+    Uploads jobs found in a directory directly to jenkins.
+    
+    The jobs should be defined as with a "config.xml" file per job, while the directory containing the
+    "config.xml" file will be used as the name of the job:
+        
+        source-dir
+            /job-name1
+                /config.xml
+            /job-name2
+                /config.xml
+                
+    Executing "cit server_upload_jobs source-dir" will upload "job-1" and "job-2" to jenkins,
+    creating or updating them.
+    '''
+    if not args:
+        print >> sys.stderr, "error: Must pass a directory name"
+        return 2
+    
+    directory = args[0]
+    if not os.path.exists(directory):
+        print >> sys.stderr, 'error: Directory "%s" does not exist' % directory
+        return 2
+
+
     jenkins_url = global_config['jenkins']['url']
     jenkins = Jenkins(jenkins_url)
-
-    directory = directory or 'hudson'
-    if not os.path.exists(directory):
-        print 'Directory not found: %r' % directory
-        return
 
     search_pattern = None
     local_jobs = []
@@ -191,7 +481,7 @@ def cit_up_from_dir(directory, global_config, reindex=True):
             print 'Missing config.xml file from %r' % dir_name
             continue
         
-        if reindex:
+        if opts.reindex:
             if search_pattern is None:
                 search_pattern = job_info.SearchPattern()
             elif search_pattern != job_info.SearchPattern():
@@ -202,8 +492,8 @@ def cit_up_from_dir(directory, global_config, reindex=True):
         
     rename_jobs = {}
     delete_jobs = []
-    if reindex:
-        remote_jobs = GetRemoteJobInfos(search_pattern, global_config, jenkins=jenkins)
+    if opts.reindex:
+        remote_jobs = get_remote_job_infos(search_pattern, global_config, jenkins=jenkins)
         remote_basenames = dict((ji.BaseName(), ji) for ji in remote_jobs)
         
         for job_info in local_jobs:
@@ -258,11 +548,27 @@ def cit_up_from_dir(directory, global_config, reindex=True):
 
 
 #===================================================================================================
-# cit_down_to_dir
+# server_download_jobs
 #===================================================================================================
-def cit_down_to_dir(directory, pattern, global_config, use_re=False):
+@app(alias='sv.down', usage='<pattern> [directory] [options]', opts=[re_option])
+def server_download_jobs(args, opts, global_config):
+    '''
+    Downloads jobs from jenkins whose name match the given pattern (fnmatch or regex style).
     
-    jenkins, jobs_to_download = cit_list_jobs(pattern, global_config, use_re=use_re, print_status=False)
+    If the directory is not given, it will default to "."
+    '''
+    if len(args) < 1:
+        print >> sys.stderr, 'error: Missing pattern argument'
+        return 2
+    
+    pattern = args[0]
+    
+    if len(args) > 1:
+        directory = args[1]
+    else:
+        directory = '.'
+        
+    jenkins, jobs_to_download = server_list_jobs([pattern], global_config, opts)
     
     print 'Found: %d jobs' % len(jobs_to_download)
     ans = raw_input("Download jobs?(y|*n): ")
@@ -283,7 +589,10 @@ def cit_down_to_dir(directory, pattern, global_config, use_re=False):
         file(xml_filename, 'w').write(job_xml)
 
 
-def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
+#===================================================================================================
+# get_remote_job_infos
+#===================================================================================================
+def get_remote_job_infos(pattern, global_config, use_re=False, jenkins=None):
     '''
     :param jenkins:
     '''
@@ -294,7 +603,8 @@ def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
         jenkins = Jenkins(jenkins_url)
 
     regex = re.compile(pattern)
-    def Match(job_name):
+    
+    def match(job_name):
         if use_re:
             return regex.match(job_name)
         else:
@@ -302,88 +612,18 @@ def GetRemoteJobInfos(pattern, global_config, use_re=False, jenkins=None):
 
     jobs = []
     for jobname in jenkins.iterkeys():
-        if Match(jobname):
+        if match(jobname):
             jobs.append(JobInfo(jobname))
             
     return jobs
     
 
 #===================================================================================================
-# cit_list_jobs
+# server_rm_jobs
 #===================================================================================================
-def cit_list_jobs(pattern, global_config, use_re=False, invoke=False, print_status=True):
-    import fnmatch
-
-    jenkins_url = global_config['jenkins']['url']
-    jenkins = Jenkins(jenkins_url)
-
-    regex = re.compile(pattern)
-    def Match(job_name):
-        if use_re:
-            return regex.match(job_name)
-        else:
-            return fnmatch.fnmatch(jobname, pattern)
-
-    jobs = []
-    for jobname in jenkins.iterkeys():
-        if Match(jobname):
-            job = jenkins.get_job(jobname)
-            if print_status:
-                print cit_get_job_status(jobname, job, len(jobs))
-            else:
-                print '\t', jobname
-            jobs.append((jobname, job))
-
-    def DeleteJobs(jobs):
-        while True:
-            job_index = raw_input('Delete job? id = ')
-            try:
-                job_index = int(job_index)
-            except:
-                break
-            else:
-                try:
-                    job_name, job = jobs[job_index]
-                except:
-                    pass
-                else:
-                    ans = raw_input('Delete job (y(es)|*n(o)? %r: ' % job_name).lower()
-                    if ans.startswith('y'):
-                        jenkins.delete_job(job_name)
-        
-    if invoke:
-        ans = raw_input('Select an operation? (*e(xit) | d(elete)| i(nvoke): ').lower()
-        if not ans or ans.startswith('e'):
-            return
-        
-        elif ans.startswith('d'):
-            DeleteJobs(jobs)
-        
-        elif ans.startswith('i'):
-            job_index = raw_input('Invoke job? id = ')
-            if job_index:
-                try:
-                    job_index = int(job_index)
-                except:
-                    pass
-                else:
-    
-                    try:
-                        job_name, job = jobs[job_index]
-                    except:
-                        pass
-                    else:
-                        print 'Invoking job: %r' % jobs[job_index][0]
-                        job.invoke()
-
-    return jenkins, jobs
-
-
-#===================================================================================================
-# cit_delete_jobs
-#===================================================================================================
-def cit_delete_jobs(pattern, global_config, use_re=False):
-    jenkins, jobs_to_delete = cit_list_jobs(pattern, global_config, use_re, print_status=False)
+@app(alias='sv.rm', usage='<pattern> [directory] [options]', opts=[re_option])
+def server_rm_jobs(args, opts, global_config):
+    jenkins, jobs_to_delete = server_list_jobs(args, global_config, opts)
 
     if len(jobs_to_delete) > 0:
         print 'Found: %d jobs' % len(jobs_to_delete)
@@ -395,49 +635,6 @@ def cit_delete_jobs(pattern, global_config, use_re=False):
 
 
 #===================================================================================================
-# cit_rm
-#===================================================================================================
-def cit_rm(branch, global_config):
-    cit_file_name, job_config = load_cit_local_config(os.getcwd())
-
-    if branch is None:
-        branch = get_git_branch(cit_file_name)
-
-    jenkins_url = global_config['jenkins']['url']
-    jenkins = Jenkins(jenkins_url)
-    for _, new_job_name in get_configured_jobs(branch, job_config):
-        if jenkins.has_job(new_job_name):
-            jenkins.delete_job(new_job_name)
-            print new_job_name, '(REMOVED)'
-        else:
-            print new_job_name, '(NOT FOUND)'
-
-#===================================================================================================
-# cit_start
-#===================================================================================================
-def cit_start(branch, global_config):
-    cit_file_name, job_config = load_cit_local_config(os.getcwd())
-
-    if branch is None:
-        branch = get_git_branch(cit_file_name)
-
-    jenkins_url = global_config['jenkins']['url']
-    jenkins = Jenkins(jenkins_url)
-
-    for _, new_job_name in get_configured_jobs(branch, job_config):
-        if jenkins.has_job(new_job_name):
-            job = jenkins.get_job(new_job_name)
-            if not job.is_running():
-                job.invoke()
-                status = '(STARTED)'
-            else:
-                status = '(RUNNING)'
-        else:
-            status = '(NOT FOUND)'
-        print new_job_name, status
-
-
-#===================================================================================================
 # git helpers
 # -----------
 #
@@ -445,82 +642,44 @@ def cit_start(branch, global_config):
 #
 #===================================================================================================
 
-
 #===================================================================================================
 # get_git_user
 #===================================================================================================
-def get_git_user(cit_file_name):
-    with chdir(cit_file_name):
+def get_git_user():
+    try:
         user_name = check_output('git config --get user.name', shell=True).strip()
         user_email = check_output('git config --get user.email', shell=True).strip()
+    except subprocess.CalledProcessError:
+        return None, None
+    else:
         return user_name, user_email
 
 
 #===================================================================================================
 # get_git_branch
 #===================================================================================================
-def get_git_branch(cit_file_name):
-    with chdir(cit_file_name):
+def get_git_branch():
+    try:
         return check_output('git rev-parse --abbrev-ref HEAD', shell=True).strip()
-
-
-#===================================================================================================
-# cit configuration
-# -----------------
-#
-# Functions and commands that deal with cit's configuration.
-#
-#===================================================================================================
-
-#===================================================================================================
-# cit_init
-#===================================================================================================
-def cit_init(global_config, stdin):
-    cit_file_name, config = load_cit_local_config(os.getcwd())
-
-    print 'Configuring jobs for feature branches: %s' % cit_file_name
-    print
-
-    updated = 0
-    while True:
-        sys.stdout.write('Source job (empty to exit):      ')
-        source_job = stdin.readline().strip()
-        if not source_job:
-            break
-
-        sys.stdout.write('Feature job (shh, use $name):    ')
-        fb_job = stdin.readline().strip()
-        if not fb_job:
-            break
-
-        fb_data = {
-            'source-job' : source_job,
-            'feature-branch-job' : fb_job,
-        }
-        config.setdefault('jobs', []).append(fb_data)
-        updated += 1
-        print 'Done! Next?'
-        print
-
-    print
-    if updated:
-        f = file(cit_file_name, 'w')
-        f.write(yaml.dump(config, default_flow_style=False))
-        f.close()
-        print 'Done! Configured %d job(s)!' % updated
-    else:
-        print 'Abort? Okaay.'
+    except subprocess.CalledProcessError:
+        return None
 
 
 #===================================================================================================
 # cit_install
 #===================================================================================================
-def cit_install(global_config_file, stdin):
+@app(alias='install')
+def cit_install():
+    '''
+    Configures cit for the first time.
+    
+    This command should be used to configure cit for the first time. 
+    '''
     print '=' * 60
     print 'Configuration'
     print '=' * 60
     sys.stdout.write('- Enter Jenkins URL:   ')
-    jenkins_url = stdin.readline().strip()
+    jenkins_url = sys.stdin.readline().strip()
     if not jenkins_url.startswith('http'):
         jenkins_url = 'http://' + jenkins_url
 
@@ -539,7 +698,7 @@ def cit_install(global_config_file, stdin):
         }
     }
 
-    f = file(global_config_file, 'w')
+    f = file(get_global_config_file(), 'w')
     f.write(yaml.dump(config, default_flow_style=False))
     f.close()
 
@@ -558,180 +717,38 @@ def get_configured_jobs(branch, job_config):
 # load_cit_local_config
 #===================================================================================================
 def load_cit_local_config(from_dir):
+    git_dir = find_git_directory(from_dir)
+    if git_dir is None:
+        return None, {}
+    
+    cit_file_name = os.path.join(os.path.dirname(git_dir), '.cit.yaml')
+
+    result = {}
+    if os.path.isfile(cit_file_name):
+        loaded_config = yaml.load(file(cit_file_name).read()) or {}
+        result.update(loaded_config)
+
+    return cit_file_name, result
+
+
+#===================================================================================================
+# find_git_directory
+#===================================================================================================
+def find_git_directory(from_dir):
     tries = 0
     max_tries = 20
     while True:
-        gitdir = os.path.join(from_dir, '.git')
-        if os.path.isdir(gitdir):
+        git_dir = os.path.join(from_dir, '.git')
+        if os.path.isdir(git_dir):
             break
         from_dir = os.path.dirname(from_dir)
 
         tries += 1
         if tries >= max_tries:
-            raise RuntimeError('could not find .git directory')
-
-    cit_file_name = os.path.join(from_dir, '.cit.yaml')
-
-    config = {}
-    if os.path.isfile(cit_file_name):
-        loaded_config = yaml.load(file(cit_file_name).read()) or {}
-        config.update(loaded_config)
-
-    return cit_file_name, config
-
-
-def parse_args(argv):
-    from optparse import OptionParser
-
-    usage = "usage: %prog <filename> [options]"
-    parser = OptionParser(usage=usage, version='0.2')
-    parser.add_option(
-        "-p", "--pattern", dest="pattern",
-        help="Job name match pattern"
-    )
-    parser.add_option(
-        "-d", "--directory", dest="directory",
-        help="Local directory to search for jobs"
-    )
-    parser.add_option(
-        "--re", action="store_true", dest="use_re", default=False,
-        help="Use Regular Expressions"
-    )
-    parser.add_option(
-        "--no-reindex", action="store_true", dest="no_reindex", default=False,
-        help="Don't try to re-index the jobs"
-    )
-
-    return parser.parse_args(argv[1:])
-
-
-#===================================================================================================
-# main
-#===================================================================================================
-def main(argv, global_config_file=None, stdin=None):
-    # default values
-    if global_config_file is None:
-        global_config_file = os.path.join(os.path.dirname(__file__), 'citconfig.yaml')
-
-    if stdin is None:
-        stdin = sys.stdin
-
-    # --install option: used to initialize configuration
-    if '--install' in argv:
-        cit_install(global_config_file, stdin)
-        return RETURN_CODE_OK
-
-    # read global config
-    if not os.path.isfile(global_config_file):
-        print >> sys.stderr, 'could not find cit config file at: %s' % global_config_file
-        return RETURN_CODE_CONFIG_NOT_FOUND
-
-    global_config = yaml.load(file(global_config_file).read())
-
-    # command dispatch
-    if len(argv) <= 1:
-        print_help()
-        return RETURN_CODE_OK
-    elif argv[1] == 'init':
-        cit_init(global_config, stdin)
-        return RETURN_CODE_OK
-    elif argv[1] in ('add', 'start', 'rm'):
-        if len(argv) > 2:
-            branch = argv[2]
-        else:
-            branch = None
-        if argv[1] == 'add':
-            cit_add(branch, global_config)
-        elif argv[1] == 'start':
-            cit_start(branch, global_config)
-        elif argv[1] == 'rm':
-            cit_rm(branch, global_config)
-        return RETURN_CODE_OK
-    else:
-        (options, args) = parse_args(argv)
-        cmd = args[0]
-        if cmd == 'upd':
-            directory = options.directory
-            cit_up_from_dir(directory, global_config, reindex=not options.no_reindex)
-            return RETURN_CODE_OK
-
-        elif cmd == 'rid':
-            directory = options.directory
-            cit_reindex_from_dir(directory, global_config)
-            return RETURN_CODE_OK
-
-        elif cmd == 'dtd':
-            directory = options.directory
-            pattern = options.pattern
-            if pattern is None:
-                if len(args) > 1:
-                    pattern = args[1]
-                else:
-                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
-                    return RETURN_CODE_OK
-
-            cit_down_to_dir(directory, pattern, global_config, use_re=options.use_re)
-            return RETURN_CODE_OK
-
-        elif cmd == 'ls':
-            pattern = options.pattern
-            if pattern is None:
-                if len(args) > 1:
-                    pattern = args[1]
-                else:
-                    print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
-                    return RETURN_CODE_OK
-
-            cit_list_jobs(pattern, global_config, invoke=True, use_re=options.use_re)
-
-            return RETURN_CODE_OK
-
-        elif cmd == 'del':
-            pattern = options.pattern
-            if len(args) > 1:
-                pattern = args[1]
-            else:
-                print 'Provide a job name pattern, e.g. "jobs.*_\d+"'
-                return RETURN_CODE_OK
-
-            cit_delete_jobs(pattern, global_config, use_re=options.use_re)
-
-            return RETURN_CODE_OK
-
-        print 'Unknown command: "%s"' % argv[1]
-        print_help()
-        return RETURN_CODE_UNKNOWN_COMMAND
-
-    return RETURN_CODE_OK
-
-
-# Error Codes --------------------------------------------------------------------------------------
-
-RETURN_CODE_OK = 0
-RETURN_CODE_UNKNOWN_COMMAND = 2
-RETURN_CODE_CONFIG_NOT_FOUND = 3
-
-
-#===================================================================================================
-# print_help
-#===================================================================================================
-def print_help():
-    print 'Commands:'
-    print
-    print '    init                   configures jobs for feature branches for this git repo'
-    print '    add [BRANCH]           add a new feature branch job to Jenkins'
-    print '    start [BRANCH]         starts a new build for the given feature branch'
-    print '    rm [BRANCH]            removes job for feature branches given'
-    print
-    print 'Specials:'
-    print
-    print '    upd -d $(dir_name)       Update or create jobs from the sub directories in $(dir_name)'
-    print '        --no-reindex             dont try to re-index the jobs'
-    print '    dtd $(search_pattern) -d $(dir_name)       Download jobs to sub directories in $(dir_name)'
-    print '    del $(search_pattern)    Delete jobs from the server that matches the given pattern'
-    print '        --re                     match jobs using a regular expression'
-    print '    ls $(search_pattern)     List jobs from the server that matches the given pattern'
-
+            return None
+        
+    return git_dir
+    
 
 #===================================================================================================
 # general utilities
@@ -740,19 +757,6 @@ def print_help():
 # General utilities that didn't fit in any other category.
 #
 #===================================================================================================
-
-#===================================================================================================
-# chdir
-#===================================================================================================
-@contextlib.contextmanager
-def chdir(cwd):
-    old_cwd = os.getcwd()
-    if os.path.isfile(cwd):
-        cwd = os.path.dirname(cwd)
-    os.chdir(cwd)
-    yield
-    os.chdir(old_cwd)
-
 
 #===================================================================================================
 # check_output
@@ -768,11 +772,11 @@ def check_output(*args, **kwargs):
         popen = subprocess.Popen(*args, **kwargs)
         stdout, stderr = popen.communicate()
         if popen.returncode != 0:
-            raise subprocess.CalledProcessError
+            raise subprocess.CalledProcessError(popen.returncode, args[0])
         return stdout
 
 #===================================================================================================
 # main
 #===================================================================================================
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    sys.exit(app.main())

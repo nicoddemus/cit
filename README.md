@@ -2,50 +2,55 @@
 
 Command line tool for interacting with a continuous integration server. 
 
-[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit) 
+The main workflow for this tool is to help work with feature branches, so that you can
+easily setup jenkins jobs to run your tests in that feature branch:
+
+```bash
+$ cit fb.add   # executed from repository at branch <my_feature_branch> 
+project_name_master => project_name_my_feature_branch (CREATED)
+```
+
+[![Build Status](https://secure.travis-ci.org/nicoddemus/cit.png?branch=master)](http://travis-ci.org/nicoddemus/cit)
 
 ## Requirements
 
 * Python 2.5, 2.6 or 2.7;
 * [simplejson](https://github.com/simplejson/simplejson);
 
+It also depends on these libraries as [submodules](http://git-scm.com/book/ch6-6.html): 
+
+* [pyyaml](http://github.com/yaml/pyyaml) 
+* [jenkinsapi](http://github.com/salimfadhley/jenkinsapi)
+* [clik](https://github.com/jds/clik.git)
+
+But these are installed transparently and don't have to be installed system-wide.
+
 ## Installing
 
 1. Clone the repository:
 
-    ```
-    git clone https://github.com/nicoddemus/cit.git
-    ```
+```bash
+$ git clone https://github.com/nicoddemus/cit.git
+```
 
 2. Execute `python install.py` in the directory to fetch dependencies and execute initial configuration.
 
-    ```
-    cd cit
-    python install.py
-    ```
+```bash
+$ cd cit
+$ python install.py
+============================================================
+Configuration
+============================================================
+- Enter Jenkins URL: http://localhost:8080   
 
-    As part of installation process you will be promped to provide Jenkins server address: 
-    
-    ```
-    ============================================================
-    Configuration
-    ============================================================
-    - Enter Jenkins URL:   
-    ```
-    
-    just copy/paste the server directly from the browser and it should be OK.
-    
-    ```
-    - Jenkins URL:   http://localhost:8080
-    
-    Checking Jenkins server... OK
-    ```
+Checking Jenkins server... OK
+```
 
 ## Commands
 
 Following there is a quick overview about main commands.
 
-### init
+### fb.init
 
 This command is responsible for configuring Jenkins jobs. The command will ask you the name of the source job, which will be taken as a template for feature jobs. After that you have to inform the job name pattern.
 
@@ -56,13 +61,13 @@ Tips:
 
 Usage:
 
-```
-cd project_name
-cit init
+```bash
+$ cd project_name
+$ cit fb.init
 Configuring jobs for feature branches: \project_name\.cit.yaml
 
-Source job (empty to exit):      project_name__1104-win32__21-project_name
-Feature job (shh, use $name):    project_name-fb-$name-win32 # "$name" will be replaced by branch's name.
+Source job (empty to exit):      project_name_master
+Feature job (shh, use $name):    project_name_$name 
 Done! Next?
 
 Source job (empty to exit):
@@ -72,44 +77,47 @@ Done! Configured 1 job(s)!
 
 This will create a `.cit.yaml` file at the project's root which should be commited to version control.
 
-### add
+### fb.add
 
-This command is responsible for adding the branches that should be under cit's watch. Any push request to the server will trigger the related job to run (lagging a few minutes).
+This command is responsible for adding the branches that should be under cit's watch.
 If you don't give a branch name the current branch will be used.
 
 Usage:
 
-```
-cit add [my_feature_branch]
-project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (CREATED)
+```bash
+$ cit fb.add [my_feature_branch]
+project_name_master => project_name_my_feature_branch (CREATED)
 ```
 
-### rm
+### fb.rm
 
-This command is responsible for removing the branches from cit's watch. That means that jobs related to the removed branch will be also removed from Jenkins.
-If you don't give a branch name the current branch will be taken.
+This will remove jobs associated with a feature branch from Jenkins. 
 
 Usage:
 
-```
-cit rm [my_feature_branch]
-project_name__1104-win32__21-project_name => project_name-fb-my_feature_branch-win32 (REMOVED)
+```bash
+$ cit fb.rm [my_feature_branch]
+project_name_master => project_name_my_feature_branch (REMOVED)
 ```
 
-### start
+If you don't give a branch name the current branch will be used.
 
-This command will force jobs related to the given branch to start running.
+### fb.start
+
+This command will start jobs related to the given branch.
 
 Usage:
 
-```
-cit start [my_feature_branch]
+```bash
+$ cit fb.start [my_feature_branch]
+project_name_master => project_name_my_feature_branch (STARTED)
 ```
 
-### upd
+
+### sv.up
 
 Uploads to Jenkins all jobs found in given directory. The given directory must contain a sub-directory for every job to be created or updated. 
-Every job is configured by a XML configuration file named `config.xml` inside job's sub-directory.
+Every job is configured by a XML configuration file named `config.xml` inside each job sub-directory.
 
 If there is a job of same name in Jenkins it updates, otherwise it creates a new job.
 If Jenkins already have a job with the same name but with a different $(job_index), the job will be renamed. To disable the search and rename just add the option --no-reindex to the command line.
@@ -125,35 +133,36 @@ e.g. my_project__01-base
 
 Usage:
 
-```
-cit upd -d [dir_name]
+```bash
+$ cit sv.up [--reindex] <dir_name>
 ```
 
 Example:
 
 ```
-$ cit upd -d foo_jobs\
+$ cit sv.up ./foo_jobs
 Updating: 'foo-redhat64'
 Updating: 'foo-win32'
 Updating: 'foo-win64'
-Update/Create jobs (yes|no):
+Update/Create jobs (y|n):
 ```
 
-### dtd
+### sv.down
 
 Download configuration files for all Jenkins jobs whose name matches given pattern. The pattern may be a regular expression if option `--re` is used 
-otherwise it defaults to Unix filename pattern matching. Directory name may be omitted then downloaded job files will be put in a directory named 'hudson'.
+otherwise it defaults to Unix filename pattern matching. 
+Directory name may be omitted then downloaded job files will be put in the current directory.
 
 Usage:
 
-```
-cit dtd [search_pattern] -d [dir_name]
+```bash
+$ cit sv.down <search_pattern> [dir_name]
 ```
 
 Example:
 
-```
-$ cit dtd foo*
+```bash
+$ cit sv.down foo*
         foo-redhat64
         foo-win32
         foo-win64
@@ -161,43 +170,45 @@ Found: 3 jobs
 Download jobs?(y|n):
 ```
 
-### ls
+### sv.ls
 
 List names and current status of all jobs in Jenkins matching given pattern. The pattern may be a regular expression if option `--re` is used otherwise 
-it defaults to Unix filename pattern matching. Also for every listed file a index is shown. After jobs are listed a question about next operation is asked 
-to user and this index may be used to queue a job on Jenkins or even delete a job.
+it defaults to Unix filename pattern matching. 
+
+If you use the `--interactive` flag, you can start or remove jobs listed by passing
+its index to the command.
 
 Usage:
 
-```
-cit ls [search_pattern]
+```bash
+$ cit sv.ls [search_pattern]
 ```
 
 Example:
 
-```
-$ cit ls foo*
+```bash
+$ cit sv.ls foo*
  0    FAILURE ( Wed Aug 07 14:36:22 2013) - foo-redhat64
  1    SUCCESS ( Wed Aug 07 14:36:22 2013) - foo-win32
  2    SUCCESS ( Wed Aug 07 14:36:22 2013) - foo-win64
-Select an operation? (e(xit) | d(elete)| i(nvoke):
+Select an operation? (rm | start | e(xit)): 
 ```
 
-### del
+### sv.rm
 
 Deletes any job matching the given pattern. The pattern may be a regular expression if option `--re` is used otherwise it defaults to Unix filename pattern 
 matching. Confirmation is prompted to user before jobs are actually deleted.
 
 Usage:
 
-```
-cit del [search_pattern]
+```bash
+$ cit sv.rm [search_pattern]
 ```
 
 Example:
 
-```
-$ cit del foo*
+```bash
+$ cit sv.del foo*
         foo-redhat64
         foo-win32
         foo-win64
@@ -212,14 +223,14 @@ Information about developing cit.
 
 ### Testing
 
-pytest (pytest.org) is used for testing, so executing the test suite is simple as:
+[pytest](pytest.org) is used for testing, so executing the test suite is simple as:
 
-```
-py.test 
+```bash
+$ py.test 
 ```
  
 Some tests require a Jenkins server running at the local machine. To run these tests execute:
 
-```
-py.test --jenkins-available
+```bash
+$ py.test --jenkins-available
 ```

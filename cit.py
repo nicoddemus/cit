@@ -152,6 +152,9 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
             publishers_elem.remove(elem)
 
     job.update_config(ET.tostring(tree))
+    # this workaround is required otherwise when copying
+    # jobs using the remote-API they are created as
+    # non-buildable for some reason
     job.disable()
     job.enable()
 

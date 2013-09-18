@@ -347,7 +347,7 @@ def server_list_jobs(args, global_config, opts):
         
     # TODO: remove this option from here, it belongs in a separate command
     if opts.interactive:
-        ans = raw_input('Select an operation? (rm | start | e(xit): ').lower()
+        ans = raw_input('Select an operation? (rm | start | e(xit)): ').lower()
         if not ans or ans.startswith('e'):
             return
         

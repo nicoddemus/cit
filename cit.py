@@ -118,6 +118,11 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
     else:
         status = 'UPDATED'
 
+    # this workaround is required otherwise when copying
+    # jobs using the remote-API they are created as
+    # non-buildable for some reason 
+    job.disable()
+
     print '%s => %s (%s)' % (job_name, new_job_name, status)
 
     original_job = jenkins.get_job(job_name)
@@ -152,10 +157,8 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
             publishers_elem.remove(elem)
 
     job.update_config(ET.tostring(tree))
-    # this workaround is required otherwise when copying
-    # jobs using the remote-API they are created as
-    # non-buildable for some reason
-    job.disable()
+
+    # part #2 of the workaround
     job.enable()
 
     return job

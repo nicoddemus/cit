@@ -152,6 +152,8 @@ def create_feature_branch_job(jenkins, job_name, new_job_name, branch, user_emai
             publishers_elem.remove(elem)
 
     job.update_config(ET.tostring(tree))
+    job.disable()
+    job.enable()
 
     return job
 

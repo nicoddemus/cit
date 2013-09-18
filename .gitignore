@@ -31,8 +31,6 @@ nosetests.xml
 
 # Mr Developer
 .mr.developer.cfg
-.project
-.pydevproject
 /citconfig.yaml
 /__pycache__
 .cit.yaml

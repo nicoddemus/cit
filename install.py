@@ -11,4 +11,4 @@ print 'Fetching submodules'
 print '=' * 60
 subprocess.check_call('git submodule init', shell=True)
 subprocess.check_call('git submodule update', shell=True)
-subprocess.check_call('python cit.py --install', shell=True)
+subprocess.check_call('python cit.py install', shell=True)

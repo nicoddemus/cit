@@ -91,14 +91,15 @@ def global_config_file(tmpdir):
 #===================================================================================================
 # TestFeatureBranchCommands
 #===================================================================================================
-@pytest.mark.skipif('not config.option.jenkins_available')
-@pytest.mark.usefixtures('change_cwd')
 class TestFeatureBranchCommands(object):
     '''
     Class that groups all tests for feature branch commands that also require a 
     jenkins instance to be executed.
     '''
+    
+    pytestmark = pytest.mark.skipif('not config.option.jenkins_available') 
 
+    @pytest.mark.usefixtures('change_cwd')
     @pytest.mark.parametrize('branch', ['new-feature', None])
     def test_fb_add(self, tmp_job_name, global_config_file, branch):
         '''
@@ -157,7 +158,8 @@ class TestFeatureBranchCommands(object):
         build_triggers = list(config.findall('.//hudson.tasks.BuildTrigger'))
         assert len(build_triggers) == 0
         
-        
+    
+    @pytest.mark.usefixtures('change_cwd')
     @pytest.mark.parametrize('branch', ['new-feature', None])
     def test_fb_rm(self, tmp_job_name, global_config_file, branch):
         '''
